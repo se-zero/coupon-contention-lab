@@ -1,0 +1,2 @@
+﻿timestamp	strategy	scenario	run	pool	elapsed_s	thresholds	commit
+2026-09-09T18:44:19	W0	spike	1	30	49.6	FAIL	uncommitted
