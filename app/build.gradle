@@ -1,0 +1,50 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '3.5.4'
+    id 'io.spring.dependency-management' version '1.1.7'
+}
+
+group = 'com.experiment'
+version = '0.0.1'
+
+// 로컬 JAVA_HOME 은 17 이므로 toolchain 으로 21 고정
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+
+    // 메트릭 노출 (Micrometer -> Prometheus)
+    implementation 'io.micrometer:micrometer-registry-prometheus'
+
+    runtimeOnly 'org.postgresql:postgresql'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-testcontainers'
+    testImplementation 'org.testcontainers:junit-jupiter'
+    testImplementation 'org.testcontainers:postgresql'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+// 스키마 단일 소유 — 테스트도 infra/postgres/init.sql 을 그대로 쓴다
+sourceSets {
+    test {
+        resources {
+            srcDir '../infra/postgres'
+        }
+    }
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}
