@@ -1,0 +1,75 @@
+server:
+  port: 8080
+  tomcat:
+    threads:
+      # 톰캣 스레드 수 고정 — 비교군 간 동일 조건 유지 (PROJECT_BRIEF 5.4)
+      max: 200
+    # 스레드가 모자랄 때 커널 큐에서 대기시킬 요청 수 (즉시 거절 방지, NFR-04)
+    accept-count: 2000
+    max-connections: 8192
+
+spring:
+  application:
+    name: coupon-experiment
+
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:coupon}
+    username: ${DB_USER:coupon}
+    password: ${DB_PASSWORD:coupon}
+    hikari:
+      pool-name: coupon-pool
+      # 커넥션 총량 30 (확정값 D-01) — 2단계에서는 인스턴스당 10 으로 주입
+      maximum-pool-size: ${DB_POOL_SIZE:30}
+      # 고정 크기 풀 — 지연 스파이크 최소화 (HikariCP 권장)
+      minimum-idle: ${DB_POOL_SIZE:30}
+      # 기본 30초는 너무 길다. 사용자는 이미 떠났고 스레드만 묶인다
+      connection-timeout: 3000
+      # 반납 누락 탐지 (부하 테스트 구간에서만 유효)
+      leak-detection-threshold: 5000
+      register-mbeans: true
+
+  jpa:
+    # 필수 — OSIV 가 켜져 있으면 요청 전 구간 커넥션을 점유해 홀딩 시간 측정이 무의미해진다
+    open-in-view: false
+    hibernate:
+      # 스키마는 infra/postgres/init.sql 이 소유한다. 애플리케이션은 검증만 한다
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          batch_size: 50
+
+coupon:
+  # 활성 전략 (W0 ~ W4) — 프로파일이 아닌 설정값으로 교체 (PROJECT_BRIEF 5.4)
+  strategy: ${COUPON_STRATEGY:W0}
+  # 2단계 인스턴스 식별자
+  instance-id: ${INSTANCE_ID:${HOSTNAME:app-local}}
+
+management:
+  server:
+    # 워크로드와 스레드 풀 분리
+    # 8080 을 같이 쓰면 포화 구간에서 스크레이프가 부하 요청 뒤에 줄을 서다 타임아웃되고,
+    # 정작 가장 필요한 순간의 메트릭이 비어버린다
+    port: 8081
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    distribution:
+      # 서버사이드 백분위는 인스턴스 간 합산이 불가능하므로 버킷을 노출한다
+      percentiles-histogram:
+        http.server.requests: true
+      # NFR-03 판정선(500ms)을 버킷 경계에 포함시킨다
+      slo:
+        http.server.requests: 5ms,10ms,25ms,50ms,100ms,200ms,300ms,500ms,1s,2s,5s
+
+logging:
+  level:
+    root: INFO
+    # 부하 구간 로그 I/O 가 측정 노이즈가 되지 않도록 억제
+    org.hibernate.SQL: WARN
+    com.zaxxer.hikari: INFO
