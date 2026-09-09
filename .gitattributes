@@ -1,0 +1,13 @@
+# 기본: 저장소에는 LF, 체크아웃도 LF
+* text=auto eol=lf
+
+# Windows 네이티브 스크립트는 CRLF 유지
+*.bat  text eol=crlf
+*.ps1  text eol=crlf
+
+# gradlew 는 리눅스 컨테이너에서 실행되므로 반드시 LF
+gradlew text eol=lf
+
+# 바이너리
+*.jar binary
+*.png binary

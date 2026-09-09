@@ -1,0 +1,33 @@
+# Gradle / Maven
+.gradle/
+build/
+target/
+
+# Java
+*.class
+*.jar
+*.war
+# 래퍼 jar 는 저장소에 포함해야 클론 직후 빌드가 된다 (Dockerfile 이 ./gradlew 사용)
+!**/gradle/wrapper/gradle-wrapper.jar
+hs_err_pid*
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.settings/
+.classpath
+.project
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 로컬 환경 / 시크릿
+.env
+.env.local
+*.local.yml
+
+# 실험 산출물
+# results/ 의 raw·log·integrity 는 커밋한다 (D-04). 재측정 없이 리포트를 쓰기 위한 원본이다.
+*.log
