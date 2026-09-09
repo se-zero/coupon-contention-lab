@@ -1,0 +1,150 @@
+# 실험 스택 (PROJECT_BRIEF 7장)
+#
+# 1단계(성능)  : docker compose up -d
+# 2단계(정합성): docker compose --profile scale up -d --scale app=3   ← 3주차
+# 부하 실행    : docker compose --profile loadtest run --rm k6 run /scripts/scenarios/spike.js
+
+name: coupon-experiment
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: coupon-postgres
+    environment:
+      POSTGRES_DB: coupon
+      POSTGRES_USER: coupon
+      POSTGRES_PASSWORD: coupon
+    command:
+      - postgres
+      # 앱 풀 30 + 모니터링/psql 여유 (확정값 D-01)
+      - -c
+      - max_connections=100
+      - -c
+      - shared_buffers=512MB
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+      - -c
+      - pg_stat_statements.track=all
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U coupon -d coupon" ]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    container_name: coupon-redis
+    # 실험 B 의 메모리 관측을 위해 정책을 명시한다
+    command: [ "redis-server", "--appendonly", "no", "--maxmemory-policy", "noeviction" ]
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  app:
+    build:
+      context: ./app
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: coupon
+      DB_USER: coupon
+      DB_PASSWORD: coupon
+      # 커넥션 총량 30 (확정값 D-01). 2단계에서는 10 으로 내린다
+      DB_POOL_SIZE: ${DB_POOL_SIZE:-30}
+      # 활성 전략 (W0 ~ W4)
+      COUPON_STRATEGY: ${COUPON_STRATEGY:-W0}
+      REDIS_HOST: redis
+    ports:
+      - "8080:8080"
+      # 관리 포트 (actuator 전용, 워크로드와 스레드 풀 분리)
+      - "8081:8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8081/actuator/health" ]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 30s
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: coupon-postgres-exporter
+    environment:
+      DATA_SOURCE_NAME: "postgresql://coupon:coupon@postgres:5432/coupon?sslmode=disable"
+      PG_EXPORTER_EXTEND_QUERY_PATH: /etc/postgres_exporter/queries.yml
+    volumes:
+      - ./infra/postgres/queries.yml:/etc/postgres_exporter/queries.yml:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.62.0
+    container_name: coupon-redis-exporter
+    environment:
+      REDIS_ADDR: "redis://redis:6379"
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: coupon-prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      # 2주차 측정을 4주차 리포트 작성 시점까지 유지해야 한다
+      - --storage.tsdb.retention.time=30d
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    container_name: coupon-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      # 로컬 실험 환경 — 로그인 없이 바로 그래프를 본다
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_USERS_DEFAULT_THEME: light
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+
+  # 컨테이너로 부하를 줄 때만 사용 (네이티브 k6 로도 동일하게 실행 가능)
+  k6:
+    image: grafana/k6:0.53.0
+    container_name: coupon-k6
+    profiles: [ loadtest ]
+    environment:
+      BASE_URL: http://app:8080
+    volumes:
+      - ./loadtest:/scripts:ro
+    entrypoint: [ "k6" ]
+
+volumes:
+  postgres-data:
+  prometheus-data:
+  grafana-data:
