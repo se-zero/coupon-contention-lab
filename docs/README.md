@@ -18,7 +18,7 @@
 
 - [x] [DB 커넥션 풀 (HikariCP)](db-connection-pool.md) — W1이 꺾이는 지점의 정체
 - [x] [JVM 로컬 락 (synchronized / ReentrantLock)](jvm-lock.md) — W0, 그리고 3 인스턴스에서 깨지는 이유
-- [ ] 트랜잭션과 격리 수준 — 왜 `SELECT` 후 `UPDATE` 가 안전하지 않은가
+- [x] [트랜잭션과 격리 수준](transaction-isolation.md) — 왜 `SELECT` 후 `UPDATE` 가 안전하지 않은가
 - [ ] 비관적 락 (`SELECT ... FOR UPDATE`) — W1
 - [ ] 낙관적 락 (`@Version`) — W2
 - [ ] 분산 락 (Redisson `RLock`) — W3
