@@ -73,7 +73,7 @@
 
 ---
 
-### [ ] 1단계 — 📄 트랜잭션과 격리 수준 <sub>반나절</sub>
+### [x] 1단계 — 📄 트랜잭션과 격리 수준 ✅ <sub>반나절</sub>
 
 W1·W2 **둘 다의 전제**이므로 개별 전략 문서보다 앞에 둔다.
 
@@ -86,18 +86,19 @@ W1·W2 **둘 다의 전제**이므로 개별 전략 문서보다 앞에 둔다.
 
 ---
 
-### [ ] 2단계 — 테스트 골격을 전략별로 확장 <sub>2시간</sub>
+### [x] 2단계 — 테스트 골격을 전략별로 확장 ✅ <sub>2시간</sub>
 
 현재 `CouponIssueConcurrencyTest` 는 **활성 전략 하나만** 검사한다. W0~W4 전부를 같은 기준으로 검사하게 바꾼다.
 
 ```
-AbstractIssueConcurrencyTest        ← NFR-01/02 검증 본문 + 컨테이너
-   ├ W0ConcurrencyTest   (properties = "coupon.strategy=W0")
-   ├ W1ConcurrencyTest
-   ├ W2ConcurrencyTest
-   ├ W3ConcurrencyTest   (Redis 컨테이너 필요)
-   └ W4ConcurrencyTest   (비동기 반영 수렴 대기 필요)
+AbstractIssueConcurrencyTest        ← NFR-01/02 검증 본문 + 컨테이너 (전 전략 공유)
+   └ W0ConcurrencyTest   (properties = "coupon.strategy=W0")
 ```
+
+**하위 클래스는 해당 전략을 구현하는 단계에서 하나씩 추가한다.** 없는 전략의 테스트를 미리 만들면
+`select()` 가 기동 시점에 터져 빌드가 깨진다. 3~6단계 각각의 산출물에 포함된다.
+
+W3 는 Redis 컨테이너를, W4 는 비동기 반영 수렴 대기를 base 에 추가해야 한다 — 그 단계에서 넣는다.
 
 **구현보다 먼저 만든다.** 정합성이 깨진 전략을 9시간짜리 측정에 넣으면 그 시간을 통째로 버린다.
 
@@ -105,7 +106,7 @@ AbstractIssueConcurrencyTest        ← NFR-01/02 검증 본문 + 컨테이너
 
 ---
 
-### [ ] 3단계 — 📄 비관적 락 → **W1 구현** <sub>반나절</sub>
+### [x] 3단계 — 📄 비관적 락 → **W1 구현** ✅ <sub>반나절</sub>
 
 `SELECT ... FOR UPDATE` 로 쿠폰 행을 잠근 뒤 차감.
 
@@ -121,7 +122,7 @@ AbstractIssueConcurrencyTest        ← NFR-01/02 검증 본문 + 컨테이너
 
 ---
 
-### [ ] 4단계 — 📄 낙관적 락 → **W2 구현** <sub>하루</sub>
+### [x] 4단계 — 📄 낙관적 락 → **W2 구현** ✅ <sub>하루</sub>
 
 `Coupon` 에 `@Version` 을 둘 수 없다. JPA 낙관적 락이 전 전략에 암묵 적용되면 W0 의 다중 인스턴스 붕괴가 가려진다 (브리프 5.2).
 
@@ -141,6 +142,12 @@ WHERE id = :id AND version = :version
 **예상 결과** 이 실험은 **쿠폰 행 하나**를 전원이 경합한다. 낙관적 락이 잘 맞는 조건의 정반대다. 재시도 폭주로 처리량이 W0 보다 낮게 나올 수 있다. 이는 실패가 아니라 **"낙관적 락을 여기에 쓰면 안 되는 이유"의 증거**다.
 
 **결정 필요** 재시도 한계 N (4장 참조)
+
+**열린 쟁점 — 공통 테스트의 "정확히 소진" 단언**
+`AbstractIssueConcurrencyTest` 는 `발급 수 == 재고` 를 단언한다. W0/W1/W3/W4 에서는 이것이
+맞지만, **W2 는 재시도 한계를 넘기면 정당하게 미달 발급**할 수 있다 (브리프 5.1 의 예상 실패 모드).
+NFR-01 이 요구하는 것은 *초과* 가 없는 것이지 *정확히 소진* 이 아니다.
+지금 추측으로 훅을 만들지 않고, W2 를 실제로 돌려 본 뒤 결정한다.
 
 **산출물** `docs/optimistic-lock.md`, `W2OptimisticLockStrategy.java`, `version` 컬럼, 재시도 카운터
 **검증** W2 통과 **+ W0/W1 이 여전히 통과** ← 낙관적 락이 다른 전략에 새지 않았다는 증거
@@ -218,7 +225,7 @@ Redisson `RLock` 으로 임계 구역 보호 후 DB 차감. Redis 의존성이 �
 
 | 항목 | 결정 시점 | 현재 추천 | 확정값 |
 |---|---|---|---|
-| W2 재시도 한계 N | 4단계 착수 시 | **3** — 실패율이 관측 대상이므로 작게 | *(미정)* |
+| W2 재시도 한계 N | 4단계 착수 시 | 3 | **3 (최대 4회 시도), 백오프 없음** ✔ |
 | W3 락 대기 타임아웃 / 초과 시 응답 | 5단계 착수 시 | **wait 3초, 429 + `LOCK_TIMEOUT`** — 5xx 로 두면 NFR-04 판정이 오염된다 | *(미정)* |
 | W4 DB 반영 방식 | 6단계 착수 시 | **Redis 큐 + 비동기 배치 워커** — 컨테이너를 늘리지 않고, DB 쓰기가 동기 경로에 남지 않는다 | *(미정)* |
 | NFR-03 판정선(P99 500ms) 적절성 | 8단계 ramp 1회차 후 | — | *(미정)* |
@@ -289,3 +296,7 @@ W1~W4 는 `IssueCore` 등 **공통 코드를 함께 쓴다.** W1 을 2일차에,
 |---|---|---|
 | 2026-09-11 | — | 2주차 계획 수립. spike 총 요청 축소와 soak 스크리닝 방식 확정 |
 | 2026-09-11 | 0 | 완료. 브리프 D-02 개정 · D-05 신설, `spike.js` TOTAL 150,000, 2주차 `conditions.md` 생성. 덤으로 브리프 D-04 의 깨진 명령 예시(`.\run-experiment.ps1`) 복구 |
+| 2026-09-11 | 1 | 완료. `docs/transaction-isolation.md`. 갱신 손실이 표준 3대 이상현상 밖에 있다는 점과, 격리 수준을 올리면 문제가 예외로 바뀔 뿐이라는 점을 중심에 둠 |
+| 2026-09-11 | 2 | 완료. `AbstractIssueConcurrencyTest` + `W0ConcurrencyTest`. 3 tests 0 failures (9.2s). 적용 전략 확인 테스트를 추가해 설정 오타로 엉뚱한 전략을 검증하는 사고를 막음. W2 의 '정확히 소진' 단언 문제를 4단계 열린 쟁점으로 기록 |
+| 2026-09-11 | 3 | 완료. `docs/pessimistic-lock.md`, `W1PessimisticLockStrategy`, `W1ConcurrencyTest`. 6 tests 0 failures. SQL 로그로 확인한 결과 `PESSIMISTIC_WRITE` 가 `for update` 가 아니라 **`for no key update`** 로 번역됨(Hibernate 6.6.22) — 상호 배제는 성립하므로 그대로 두고 문서에 근거를 기록. 본문 `findById` 가 DB 재조회 없음도 요청 2,000건 : 조회 2,000건으로 확인 |
+| 2026-09-11 | 4 | 완료. `docs/optimistic-lock.md`, `W2OptimisticLockStrategy`, `version` 컬럼, 재시도 카운터. 9 tests 0 failures. SQL 로그로 재시도 폭주 확인 — 발급 101건에 조건부 UPDATE 2,205건(충돌 2,104), **발급 1건당 21.8회**. 2단계 열린 쟁점(미달 발급)은 요청이 재고의 10배라 발생하지 않음을 확인하고 닫음 |
