@@ -14,7 +14,7 @@ import java.time.LocalDateTime;
  *
  * 주의: @Version 필드를 두지 않는다.
  * JPA 낙관적 락이 전 전략에 암묵 적용되면 W0 의 다중 인스턴스 붕괴가 가려진다. (PROJECT_BRIEF 5.2)
- * W2 는 별도 방식으로 버전을 다룬다.
+ * version 컬럼은 두되 @Version 없이 평범한 컬럼으로 매핑한다. W2 만 조건부 UPDATE 로 이 값을 쓴다.
  */
 @Entity
 @Table(name = "coupon")
@@ -32,6 +32,10 @@ public class Coupon {
 
     @Column(name = "issued_count", nullable = false)
     private int issuedCount;
+
+    // W2 낙관적 락용 — @Version 이 아니라 평범한 컬럼이다
+    @Column(nullable = false)
+    private long version;
 
     @Column(name = "start_at", nullable = false)
     private LocalDateTime startAt;
@@ -66,6 +70,10 @@ public class Coupon {
 
     public int getIssuedCount() {
         return issuedCount;
+    }
+
+    public long getVersion() {
+        return version;
     }
 
     public LocalDateTime getStartAt() {

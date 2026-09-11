@@ -20,10 +20,12 @@ public class IssueMetrics {
 
     private static final String ISSUE_COUNTER = "coupon.issue";
     private static final String VIOLATION_COUNTER = "coupon.issue.constraint.violation";
+    private static final String RETRY_COUNTER = "coupon.issue.retry";
 
     private final MeterRegistry registry;
     private final Map<IssueResult, Counter> resultCounters = new EnumMap<>(IssueResult.class);
     private Counter constraintViolationCounter;
+    private Counter retryCounter;
 
     public IssueMetrics(MeterRegistry registry) {
         this.registry = registry;
@@ -41,6 +43,10 @@ public class IssueMetrics {
         constraintViolationCounter = Counter.builder(VIOLATION_COUNTER)
                 .description("UNIQUE 제약에 걸린 건수 (전략 방어 실패)")
                 .register(registry);
+        // 낙관적 충돌로 다시 시도한 횟수 (W2)
+        retryCounter = Counter.builder(RETRY_COUNTER)
+                .description("낙관적 충돌 재시도 횟수")
+                .register(registry);
     }
 
     // 결과별 집계
@@ -51,5 +57,10 @@ public class IssueMetrics {
     // 제약 위반 집계
     public void recordConstraintViolation() {
         constraintViolationCounter.increment();
+    }
+
+    // 재시도 집계
+    public void recordRetry() {
+        retryCounter.increment();
     }
 }

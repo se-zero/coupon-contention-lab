@@ -6,6 +6,8 @@ CREATE TABLE IF NOT EXISTS coupon (
     name           VARCHAR(100) NOT NULL,
     total_quantity INTEGER      NOT NULL,
     issued_count   INTEGER      NOT NULL DEFAULT 0,
+    -- W2 낙관적 락용. @Version 으로 매핑하지 않는다 — 붙이면 전 전략에 암묵 적용된다 (PROJECT_BRIEF 5.2)
+    version        BIGINT       NOT NULL DEFAULT 0,
     start_at       TIMESTAMP    NOT NULL,
     end_at         TIMESTAMP    NOT NULL
 );
