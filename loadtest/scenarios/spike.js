@@ -10,8 +10,8 @@ import { issueOnce, warmupOnce } from '../lib/issue.js';
 import { SPIKE_COUPON_ID, SUSTAINED_COUPON_ID } from '../lib/config.js';
 
 const VUS = Number(__ENV.VUS || 1000);
-// 재고 100,000 의 10배 (확정값 D-02) — 소진 후 900,000 건이 NFR-04 검증 구간이 된다
-const TOTAL = Number(__ENV.TOTAL || 1000000);
+// 재고 100,000 + 거절 50,000 (확정값 D-02) — 뒤쪽 50,000 건이 NFR-04 검증 구간이 된다
+const TOTAL = Number(__ENV.TOTAL || 150000);
 
 export const options = {
     scenarios: {

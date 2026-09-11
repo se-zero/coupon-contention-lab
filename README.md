@@ -79,7 +79,7 @@ docker compose up -d --force-recreate app
 | PostgreSQL `max_connections` | 100 |
 | 톰캣 스레드 수 | 200 (전 비교군 동일) |
 | JVM 힙 | `-Xms1g -Xmx1g` (전 비교군 동일) |
-| 쿠폰 재고 / 총 요청 | 100,000 / 1,000,000 (경합비 10:1) |
+| 쿠폰 재고 / 총 요청 | 100,000 / 150,000 (확정값 D-02) |
 
 ## 구조
 
@@ -104,7 +104,7 @@ docker compose up -d --force-recreate app
 측정은 **반드시 `run-experiment.ps1` 로 한다.** 손으로 k6 를 돌리면 초기화를 빠뜨려 결과가 오염된다.
 
 ```powershell
-.un-experiment.ps1 -Strategy W0 -Scenario spike -Run 1
+.\run-experiment.ps1 -Strategy W0 -Scenario spike -Run 1
 ```
 
 결과는 `results/<주차>/` 에 원본(k6 JSON)·로그·정합성 판정으로 남는다. 자세한 규칙은 [`results/README.md`](results/README.md) 참조.

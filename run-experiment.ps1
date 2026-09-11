@@ -5,7 +5,7 @@
 #
 # 사용법:
 #   .\run-experiment.ps1 -Strategy W0 -Scenario spike -Run 1
-#   .\run-experiment.ps1 -Strategy W1 -Scenario ramp  -Run 2 -K6Env VUS=1000,TOTAL=1000000
+#   .\run-experiment.ps1 -Strategy W1 -Scenario ramp  -Run 2 -K6Env HOLD=1m
 #   .\run-experiment.ps1 -Strategy W0 -Scenario spike -Run 1 -PoolSize 10 -Week week3-experiment-a-stage2
 
 param(
@@ -24,7 +24,7 @@ param(
     # 커넥션 총량 (확정값 D-01: 1단계 30, 2단계 인스턴스당 10)
     [int]$PoolSize = 30,
 
-    # k6 에 넘길 추가 변수 (예: VUS=1000,TOTAL=1000000)
+    # k6 에 넘길 추가 변수 (예: VUS=500,TOTAL=50000) - 축소 실행용. 정식 측정은 기본값(D-02)을 쓴다
     [string[]]$K6Env = @()
 )
 
