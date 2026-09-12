@@ -186,7 +186,7 @@ Redisson `RLock` 으로 임계 구역 보호 후 DB 차감. Redis 의존성이 �
 
 ---
 
-### [ ] 7단계 — chaos.js + 배치 러너 <sub>반나절</sub>
+### [x] 7단계 — chaos.js + 배치 러너 ✅ <sub>반나절</sub>
 
 | 산출물 | 내용 |
 |---|---|
@@ -205,7 +205,7 @@ Redisson `RLock` 으로 임계 구역 보호 후 DB 차감. Redis 의존성이 �
 
 **ramp 1회차 직후 멈추고 NFR-03 판정선(P99 500ms)을 재검토한다.** 브리프 13장에 "2주차 1차 측정 후"로 잡혀 있는 항목이다. W0 가 1주차에 P99 9.92초를 찍었으므로 **전 전략 미달 가능성이 높고, 전부 FAIL 이면 임계값이 변별력을 잃는다.**
 
-**검증** `runs.tsv` 36행, `integrity/` 파일 36개, 누락 0
+**검증** `runs.tsv` 41행, `integrity/` 파일 41개, 누락 0
 
 ---
 
@@ -228,6 +228,7 @@ Redisson `RLock` 으로 임계 구역 보호 후 DB 차감. Redis 의존성이 �
 | W2 재시도 한계 N | 4단계 착수 시 | 3 | **3 (최대 4회 시도), 백오프 없음** ✔ |
 | W3 락 대기 타임아웃 / 초과 시 응답 | 5단계 착수 시 | wait 3초, 429 + `LOCK_TIMEOUT` → **503 으로 정정.** 429 는 클라이언트 탓이라는 코드이고, 4xx 로 포장하면 NFR-04 판정을 피하려고 코드를 고른 것이 된다 | **wait 3초, 503 + `LOCK_TIMEOUT`, leaseTime 없음(watchdog), Redis 장애 시 예외 통과** ✔ |
 | W4 DB 반영 방식 | 6단계 착수 시 | **Redis 큐 + 비동기 배치 워커** — 컨테이너를 늘리지 않고, DB 쓰기가 동기 경로에 남지 않는다 | **Redis 큐(같은 Lua 안에서 적재) + 앱 내 워커 100ms/500건, 커밋 후 제거** ✔ 브리프 D-06. 아웃박스는 요청 경로에 DB 가 돌아와서, 메시지 큐는 변수가 늘고 브로커 내구성이 "Redis 장애 시 공백" 관측을 가려서 제외 |
+| chaos 방식 — 재시작 여부 / 죽이는 시점 / 정전 길이 | 7단계 착수 시 | 빈 상태 재시작 / 발급 50,000건 / 10초 | **빈 상태 재시작(RDB 도 끔) / 발급 50,000건 시점 / 10초** ✔ 브리프 D-07 |
 | NFR-03 판정선(P99 500ms) 적절성 | 8단계 ramp 1회차 후 | — | *(미정)* |
 
 ---
@@ -240,7 +241,7 @@ Redisson `RLock` 으로 임계 구역 보호 후 DB 차감. Redis 의존성이 �
 | 2 | **spike** | W0~W4 | ×3 | 3.0h | NFR-01/02/04 — 정합성 |
 | 3 | **chaos** | W3, W4 | ×3 | 0.5h | NFR-05 — 장애 내성 |
 | 4 | **soak** | W0~W4 | ×1 | 2.6h | NFR-06 — 시간축 열화 (스크리닝) |
-| | | | **36회** | **약 9시간** | |
+| | | | **41회** | **약 9시간** | |
 
 ### soak 판정 규칙 (D-05)
 
@@ -302,3 +303,4 @@ W1~W4 는 `IssueCore` 등 **공통 코드를 함께 쓴다.** W1 을 2일차에,
 | 2026-09-11 | 4 | 완료. `docs/optimistic-lock.md`, `W2OptimisticLockStrategy`, `version` 컬럼, 재시도 카운터. 9 tests 0 failures. SQL 로그로 재시도 폭주 확인 — 발급 101건에 조건부 UPDATE 2,205건(충돌 2,104), **발급 1건당 21.8회**. 2단계 열린 쟁점(미달 발급)은 요청이 재고의 10배라 발생하지 않음을 확인하고 닫음 |
 | 2026-09-12 | 5 | 완료. `docs/distributed-lock.md`, `W3DistributedLockStrategy`, `RedissonConfig`, `LOCK_TIMEOUT`(503), 테스트용 Redis 컨테이너. 12 tests 0 failures. Redisson 은 4.x 가 Netty 4.2 를 요구해 Boot 3.5 와 맞는 **3.52.0** 채택. `redis-cli MONITOR` 로 확인 — 획득 1,877건에 락 스크립트 5,103회(**획득 1건당 시도 2.7회**, 비공정), JVM 당 구독 1개, **watchdog 연장 1,175회** — 획득마다 10초 타이머를 걸고 해제 시 취소하지 않는 `RenewalTask` 구조. 요청 경로 밖이라 지연에는 안 들어가지만 Redis 명령 수 해석 시 참고. 초과 시 응답은 추천했던 429 를 503 으로 정정 |
 | 2026-09-12 | 6 | 완료. `docs/redis-atomic.md`, `W4RedisAtomicStrategy`(Lua 2개: 발급·적재), `W4DbSyncWorker`(W4 일 때만 생성), 큐 길이 게이지·반영 카운터, `run-experiment.ps1` 에 W4 반영 대기 단계와 `runs.tsv` 의 `reflect_wait_s` 열, 브리프 **D-06** 신설(13장 항목 닫음). 15 tests 0 failures — W4 NFR-01 0.5초 (W0 4.6 / W3 5.5). 컨텍스트 5개 × 풀 30 이 테스트 PostgreSQL 의 max_connections 100 을 넘어 `@DirtiesContext(AFTER_CLASS)` 로 전략별 컨텍스트를 닫음. MONITOR 로 확인 — **요청당 Redis 왕복 1회, 요청 경로 DB 접근 0**. 적재 경쟁 관측: 빈 Redis 첫 요청에 64 스레드가 전부 DB 를 읽음(적재는 `EXISTS` 로 1회). spike 첫 순간 200건 — 고치지 않고 관측 |
+| 2026-09-12 | 7 | 완료. `chaos.js`(임계값 없음), `run-experiment.ps1` chaos 분기(발급 기준 kill → 10초 → start, `.chaos.txt` 타임라인)와 `runs.tsv` 에 `k6_issued`/`db_rows`/`server_error` 열, `-dirty` 표시. `run-week2.ps1`(재개·`-Phase ramp1/rest`, 시작 시 이미지 빌드). compose Redis `--save ""` — **RDB 가 기본값으로 켜져 있던 것을 발견**하고 끔. 브리프 **D-07**. `down -v` 후 축소 실행: **W4** (200 VU, 60,000건, kill@11,441) k6 발급 − DB 행 = **+6,779**, 5xx 384, DB 는 over_issue 0·drift 0 으로 깨끗 — 유실은 큐 백로그 전부(워커 100ms/500 이 200 VU 발급 속도를 못 따라감). **W3** (20,000건, kill@5,053) 차이 **−1**(커밋 후 unlock 실패 1건), 5xx 563. 첫 시도에서 kill 트리거가 워밍업 발급까지 세어 워밍업 중에 죽인 버그 → 시나리오 시작 시점 기준선을 빼도록 수정. 러너 건수 세다가 계획서의 **36회가 41회의 오산**(soak 5 누락)임을 발견 — 시간 예산 9h 는 원래 맞았음 |

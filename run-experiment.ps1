@@ -7,12 +7,13 @@
 #   .\run-experiment.ps1 -Strategy W0 -Scenario spike -Run 1
 #   .\run-experiment.ps1 -Strategy W1 -Scenario ramp  -Run 2 -K6Env HOLD=1m
 #   .\run-experiment.ps1 -Strategy W0 -Scenario spike -Run 1 -PoolSize 10 -Week week3-experiment-a-stage2
+#   .\run-experiment.ps1 -Strategy W4 -Scenario chaos -Run 1 -K6Env VUS=200,TOTAL=20000 -ChaosKillAt 5000
 
 param(
     [Parameter(Mandatory)][ValidateSet('W0', 'W1', 'W2', 'W3', 'W4')]
     [string]$Strategy,
 
-    [Parameter(Mandatory)][ValidateSet('spike', 'ramp', 'soak')]
+    [Parameter(Mandatory)][ValidateSet('spike', 'ramp', 'soak', 'chaos')]
     [string]$Scenario,
 
     [Parameter(Mandatory)][ValidateRange(1, 10)]
@@ -25,7 +26,10 @@ param(
     [int]$PoolSize = 30,
 
     # k6 에 넘길 추가 변수 (예: VUS=500,TOTAL=50000) - 축소 실행용. 정식 측정은 기본값(D-02)을 쓴다
-    [string[]]$K6Env = @()
+    [string[]]$K6Env = @(),
+
+    # chaos 전용 - 발급이 이 건수에 도달하면 Redis 를 죽인다 (확정값 D-07: 재고의 절반). 축소 실행 시 함께 줄인다
+    [int]$ChaosKillAt = 50000
 )
 
 $ErrorActionPreference = 'Stop'
@@ -39,6 +43,14 @@ function Invoke-Native {
     $ErrorActionPreference = 'Continue'
     try { & $Command } finally { $ErrorActionPreference = $prev }
 }
+# 앱 메트릭에서 누적 발급 수를 읽는다 (chaos 의 kill 시점 판단용). 못 읽으면 -1
+function Get-IssuedCount {
+    try {
+        $text = (Invoke-WebRequest -Uri 'http://localhost:8081/actuator/prometheus' -UseBasicParsing -TimeoutSec 3).Content
+        if ($text -match 'coupon_issue_total\{[^}]*result="ISSUED"[^}]*\}\s+([0-9.eE+\-]+)') { return [double]$Matches[1] }
+    } catch { }
+    return -1
+}
 $tag = "$Strategy-$Scenario-run$Run"
 
 $weekDir = Join-Path $root "results\$Week"
@@ -51,6 +63,7 @@ foreach ($d in @($rawDir, $logDir, $intDir)) {
 
 $summaryJson = Join-Path $rawDir "$tag.json"
 $k6Log = Join-Path $logDir "$tag.txt"
+$chaosLog = Join-Path $logDir "$tag.chaos.txt"
 $integrityOut = Join-Path $intDir "$tag.txt"
 
 Write-Host "=== [$tag] 시작 ===" -ForegroundColor Cyan
@@ -96,8 +109,46 @@ foreach ($e in $K6Env) { $k6Args += @('-e', $e) }
 $k6Args += "$root\loadtest\scenarios\$Scenario.js"
 
 $startedAt = Get-Date
-Invoke-Native { & k6 @k6Args } | Tee-Object -FilePath $k6Log
-$k6Exit = $LASTEXITCODE
+if ($Scenario -ne 'chaos') {
+    Invoke-Native { & k6 @k6Args } | Tee-Object -FilePath $k6Log
+    $k6Exit = $LASTEXITCODE
+} else {
+    # chaos - k6 를 백그라운드로 두고 발급 수를 지켜보다가 Redis 를 죽였다 살린다 (확정값 D-07)
+    # 시간이 아니라 발급 수를 기준으로 하는 이유: W4 는 W3 보다 훨씬 빨라서 같은 시각에 죽이면
+    # 한쪽은 매진 후, 한쪽은 판매 중이 된다
+    $chaosDowntimeSec = 10
+    $k6Err = "$k6Log.stderr"
+    $proc = Start-Process -FilePath 'k6' -ArgumentList $k6Args -NoNewWindow -PassThru `
+        -RedirectStandardOutput $k6Log -RedirectStandardError $k6Err
+    $null = $proc.Handle   # 핸들을 미리 잡아두지 않으면 종료 뒤 ExitCode 가 비어 있다 (PS 5.1)
+    # 앱의 발급 카운터는 워밍업(다른 쿠폰)도 센다. chaos 시나리오가 시작되는 시점(chaos.js startTime 35s)의
+    # 값을 기준선으로 빼야 "spike-coupon 발급 N 건" 이 된다 - 안 빼면 워밍업 중에 죽인다
+    Start-Sleep -Seconds 35
+    $base = [math]::Max(0, (Get-IssuedCount))
+    $killed = $false
+    while (-not $proc.HasExited) {
+        Start-Sleep -Seconds 1
+        if ($killed) { continue }
+        $issued = (Get-IssuedCount) - $base
+        if ($issued -ge $ChaosKillAt) {
+            $killAt = Get-Date
+            Invoke-Native { docker compose -f "$root\docker-compose.yml" kill redis } | Out-Null
+            "$($killAt.ToString('s'))`tkill`tissued=$issued" | Out-File -FilePath $chaosLog -Encoding utf8
+            Write-Host "      Redis kill  $($killAt.ToString('HH:mm:ss'))  (발급 $issued 건)" -ForegroundColor Yellow
+            Start-Sleep -Seconds $chaosDowntimeSec
+            Invoke-Native { docker compose -f "$root\docker-compose.yml" start redis } | Out-Null
+            $restartAt = Get-Date
+            "$($restartAt.ToString('s'))`tstart`tdowntime_s=$chaosDowntimeSec" | Out-File -FilePath $chaosLog -Encoding utf8 -Append
+            Write-Host "      Redis start $($restartAt.ToString('HH:mm:ss'))  (빈 상태로 재시작)" -ForegroundColor Yellow
+            $killed = $true
+        }
+    }
+    $proc.WaitForExit()
+    $k6Exit = $proc.ExitCode
+    # k6 의 진행 로그(stderr)를 본 로그 뒤에 붙인다
+    if (Test-Path $k6Err) { Get-Content $k6Err | Add-Content -Path $k6Log; Remove-Item $k6Err }
+    if (-not $killed) { throw "발급이 $ChaosKillAt 건에 도달하지 않아 Redis 를 죽이지 못했다. 무효 실행 - 기록하지 않는다" }
+}
 $elapsed = [math]::Round(((Get-Date) - $startedAt).TotalSeconds, 1)
 
 # k6 종료 코드: 0=통과, 99=임계값 미달, 그 외=실행 실패
@@ -136,21 +187,36 @@ Invoke-Native {
         docker compose -f "$root\docker-compose.yml" exec -T postgres psql -U coupon -d coupon -v ON_ERROR_STOP=1
 } | Tee-Object -FilePath $integrityOut
 
+# ── k6 가 센 것과 DB 가 기억하는 것 ────────────────────────────────────
+# k6_issued = 사용자에게 "받았다" 고 답한 횟수, db_rows = 서버가 실제로 기억하는 발급 수.
+# 평소엔 같다. W4 chaos 에서 갈리는 만큼이 유실된 발급이다 (verify.sql 만으로는 보이지 않는다)
+$summary = Get-Content $summaryJson -Raw -Encoding UTF8 | ConvertFrom-Json
+$k6Issued = 0; $serverError = 0
+if ($summary.metrics.coupon_issued) { $k6Issued = [int]$summary.metrics.coupon_issued.count }
+if ($summary.metrics.coupon_server_error) { $serverError = [int]$summary.metrics.coupon_server_error.count }
+$dbRows = [int](Invoke-Native {
+    docker compose -f "$root\docker-compose.yml" exec -T postgres psql -U coupon -d coupon -tA -c 'SELECT count(*) FROM coupon_issue'
+})
+Write-Host "      k6 발급 $k6Issued / DB 행 $dbRows / 차이 $($k6Issued - $dbRows) / 5xx $serverError"
+
 # ── 실행 이력 기록 ─────────────────────────────────────────────────────
 $indexFile = Join-Path $weekDir 'runs.tsv'
 if (-not (Test-Path $indexFile)) {
-    "timestamp`tstrategy`tscenario`trun`tpool`telapsed_s`tthresholds`treflect_wait_s`tcommit" |
+    "timestamp`tstrategy`tscenario`trun`tpool`telapsed_s`tthresholds`treflect_wait_s`tk6_issued`tdb_rows`tserver_error`tcommit" |
         Out-File -FilePath $indexFile -Encoding utf8
 }
 $commit = Invoke-Native { git -C $root rev-parse --short HEAD 2>$null }
 if (-not $commit) { $commit = 'uncommitted' }
-"$($startedAt.ToString('s'))`t$Strategy`t$Scenario`t$Run`t$PoolSize`t$elapsed`t$thresholds`t$reflectWait`t$commit" |
+# 커밋 안 된 변경이 있으면 표시한다 - "같은 커밋으로 측정했다" 는 확인이 이 열에 기대기 때문이다 (conditions.md)
+elseif (Invoke-Native { git -C $root status --porcelain 2>$null }) { $commit = "$commit-dirty" }
+"$($startedAt.ToString('s'))`t$Strategy`t$Scenario`t$Run`t$PoolSize`t$elapsed`t$thresholds`t$reflectWait`t$k6Issued`t$dbRows`t$serverError`t$commit" |
     Out-File -FilePath $indexFile -Encoding utf8 -Append
 
 Write-Host "=== [$tag] 완료 — 임계값 $thresholds, ${elapsed}초 ===" -ForegroundColor Green
 Write-Host "  요약  $summaryJson"
 Write-Host "  로그  $k6Log"
 Write-Host "  정합성 $integrityOut"
+if ($Scenario -eq 'chaos') { Write-Host "  chaos  $chaosLog" }
 
 # git rev-parse 등 앞선 네이티브 호출의 종료 코드가 스크립트 결과로 새지 않게 한다
 exit 0

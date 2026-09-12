@@ -40,7 +40,7 @@ docker compose up -d --build
 
 | 쿠폰 | id | 재고 | 용도 |
 |---|---|---|---|
-| `spike-coupon` | 1 | 100,000 | spike — 소진시켜 NFR-01/02/04 검증 |
+| `spike-coupon` | 1 | 100,000 | spike / chaos — 소진시켜 NFR-01/02/04 검증 |
 | `sustained-coupon` | 2 | 5,000,000 | ramp / soak — 소진되지 않음 |
 
 ### 3. 부하 실행
@@ -96,7 +96,8 @@ docker compose up -d --force-recreate app
 ├── seed/                 # 시드 주입 / 정합성 판정 스크립트
 ├── loadtest/             # k6 부하 스크립트
 ├── results/              # 측정 원본 (주차별) — 4주차 리포트의 근거
-└── run-experiment.ps1    # 측정 1회 실행 (초기화 → 부하 → 판정 → 저장)
+├── run-experiment.ps1    # 측정 1회 실행 (초기화 → 부하 → 판정 → 저장)
+└── run-week2.ps1         # 2주차 41회 무인 실행 (재개 가능)
 ```
 
 ## 측정 실행
@@ -105,6 +106,8 @@ docker compose up -d --force-recreate app
 
 ```powershell
 .\run-experiment.ps1 -Strategy W0 -Scenario spike -Run 1
+.\run-experiment.ps1 -Strategy W4 -Scenario chaos -Run 1     # 부하 중 Redis 를 죽였다 살린다 (W3/W4)
+.\run-week2.ps1 -Phase ramp1                                 # 2주차 전체는 배치 러너로 (약 9시간, 무인)
 ```
 
 결과는 `results/<주차>/` 에 원본(k6 JSON)·로그·정합성 판정으로 남는다. 자세한 규칙은 [`results/README.md`](results/README.md) 참조.

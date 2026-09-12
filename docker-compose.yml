@@ -40,7 +40,9 @@ services:
     image: redis:7-alpine
     container_name: coupon-redis
     # 실험 B 의 메모리 관측을 위해 정책을 명시한다
-    command: [ "redis-server", "--appendonly", "no", "--maxmemory-policy", "noeviction" ]
+    # 영속성 없음 — AOF 와 함께 RDB 스냅샷(기본값 save 3600 1 300 100 60 10000)도 끈다.
+    # 켜져 있으면 chaos 재시작 시 마지막 저장 시점으로 되돌아가 결과가 저장 시점에 따라 달라진다 (D-07)
+    command: [ "redis-server", "--appendonly", "no", "--save", "", "--maxmemory-policy", "noeviction" ]
     ports:
       - "6379:6379"
     healthcheck:
