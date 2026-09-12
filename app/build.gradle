@@ -27,6 +27,9 @@ dependencies {
     // 메트릭 노출 (Micrometer -> Prometheus)
     implementation 'io.micrometer:micrometer-registry-prometheus'
 
+    // 분산 락 (W3). 4.x 는 Netty 4.2 를 요구하고 Boot 3.5 는 4.1 을 관리하므로 3.x 마지막 버전을 쓴다
+    implementation 'org.redisson:redisson:3.52.0'
+
     runtimeOnly 'org.postgresql:postgresql'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'

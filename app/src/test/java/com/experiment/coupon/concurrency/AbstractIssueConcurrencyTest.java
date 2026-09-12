@@ -8,6 +8,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.PostgreSQLContainer;
 
 import java.util.concurrent.CountDownLatch;
@@ -42,8 +45,19 @@ public abstract class AbstractIssueConcurrencyTest {
             .withCommand("postgres", "-c", "shared_preload_libraries=pg_stat_statements")
             .withInitScript("init.sql");
 
+    // Redisson 클라이언트가 기동 시 접속하므로 전략과 무관하게 필요하다 (RedissonConfig)
+    static final GenericContainer<?> REDIS = new GenericContainer<>("redis:7-alpine")
+            .withExposedPorts(6379);
+
     static {
         POSTGRES.start();
+        REDIS.start();
+    }
+
+    @DynamicPropertySource
+    static void redisProperties(DynamicPropertyRegistry registry) {
+        registry.add("spring.data.redis.host", REDIS::getHost);
+        registry.add("spring.data.redis.port", REDIS::getFirstMappedPort);
     }
 
     @Autowired

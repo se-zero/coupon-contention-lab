@@ -28,6 +28,11 @@ spring:
       leak-detection-threshold: 5000
       register-mbeans: true
 
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
   jpa:
     # 필수 — OSIV 가 켜져 있으면 요청 전 구간 커넥션을 점유해 홀딩 시간 측정이 무의미해진다
     open-in-view: false
