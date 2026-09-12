@@ -2,12 +2,14 @@ package com.experiment.coupon.metrics;
 
 import com.experiment.coupon.domain.IssueResult;
 import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.annotation.PostConstruct;
 import org.springframework.stereotype.Component;
 
 import java.util.EnumMap;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * 발급 커스텀 메트릭
@@ -21,11 +23,15 @@ public class IssueMetrics {
     private static final String ISSUE_COUNTER = "coupon.issue";
     private static final String VIOLATION_COUNTER = "coupon.issue.constraint.violation";
     private static final String RETRY_COUNTER = "coupon.issue.retry";
+    private static final String REFLECTED_COUNTER = "coupon.w4.reflected";
+    private static final String QUEUE_SIZE_GAUGE = "coupon.w4.queue.size";
 
     private final MeterRegistry registry;
     private final Map<IssueResult, Counter> resultCounters = new EnumMap<>(IssueResult.class);
     private Counter constraintViolationCounter;
     private Counter retryCounter;
+    private Counter reflectedCounter;
+    private final AtomicLong queueSize = new AtomicLong();
 
     public IssueMetrics(MeterRegistry registry) {
         this.registry = registry;
@@ -47,6 +53,13 @@ public class IssueMetrics {
         retryCounter = Counter.builder(RETRY_COUNTER)
                 .description("낙관적 충돌 재시도 횟수")
                 .register(registry);
+        // 비동기 DB 반영 (W4) — 큐 길이의 시간 곡선이 반영 지연이다
+        reflectedCounter = Counter.builder(REFLECTED_COUNTER)
+                .description("워커가 DB 에 반영한 건수")
+                .register(registry);
+        Gauge.builder(QUEUE_SIZE_GAUGE, queueSize, AtomicLong::get)
+                .description("DB 반영 대기 중인 발급 건수")
+                .register(registry);
     }
 
     // 결과별 집계
@@ -62,5 +75,15 @@ public class IssueMetrics {
     // 재시도 집계
     public void recordRetry() {
         retryCounter.increment();
+    }
+
+    // 반영 건수 집계
+    public void recordReflected(int count) {
+        reflectedCounter.increment(count);
+    }
+
+    // 반영 대기 큐 길이
+    public void recordQueueSize(long size) {
+        queueSize.set(size);
     }
 }

@@ -169,7 +169,7 @@ Redisson `RLock` 으로 임계 구역 보호 후 DB 차감. Redis 의존성이 �
 
 ---
 
-### [ ] 6단계 — 📄 Redis 단일 스레드와 Lua 원자성 → **W4 구현** <sub>1.5일</sub>
+### [x] 6단계 — 📄 Redis 단일 스레드와 Lua 원자성 → **W4 구현** ✅ <sub>1.5일</sub>
 
 가장 무거운 단계. Lua 스크립트로 재고 차감 + 중복 체크를 원자적으로 하고, **DB 반영은 비동기**로 돌린다.
 
@@ -227,7 +227,7 @@ Redisson `RLock` 으로 임계 구역 보호 후 DB 차감. Redis 의존성이 �
 |---|---|---|---|
 | W2 재시도 한계 N | 4단계 착수 시 | 3 | **3 (최대 4회 시도), 백오프 없음** ✔ |
 | W3 락 대기 타임아웃 / 초과 시 응답 | 5단계 착수 시 | wait 3초, 429 + `LOCK_TIMEOUT` → **503 으로 정정.** 429 는 클라이언트 탓이라는 코드이고, 4xx 로 포장하면 NFR-04 판정을 피하려고 코드를 고른 것이 된다 | **wait 3초, 503 + `LOCK_TIMEOUT`, leaseTime 없음(watchdog), Redis 장애 시 예외 통과** ✔ |
-| W4 DB 반영 방식 | 6단계 착수 시 | **Redis 큐 + 비동기 배치 워커** — 컨테이너를 늘리지 않고, DB 쓰기가 동기 경로에 남지 않는다 | *(미정)* |
+| W4 DB 반영 방식 | 6단계 착수 시 | **Redis 큐 + 비동기 배치 워커** — 컨테이너를 늘리지 않고, DB 쓰기가 동기 경로에 남지 않는다 | **Redis 큐(같은 Lua 안에서 적재) + 앱 내 워커 100ms/500건, 커밋 후 제거** ✔ 브리프 D-06. 아웃박스는 요청 경로에 DB 가 돌아와서, 메시지 큐는 변수가 늘고 브로커 내구성이 "Redis 장애 시 공백" 관측을 가려서 제외 |
 | NFR-03 판정선(P99 500ms) 적절성 | 8단계 ramp 1회차 후 | — | *(미정)* |
 
 ---
@@ -301,3 +301,4 @@ W1~W4 는 `IssueCore` 등 **공통 코드를 함께 쓴다.** W1 을 2일차에,
 | 2026-09-11 | 3 | 완료. `docs/pessimistic-lock.md`, `W1PessimisticLockStrategy`, `W1ConcurrencyTest`. 6 tests 0 failures. SQL 로그로 확인한 결과 `PESSIMISTIC_WRITE` 가 `for update` 가 아니라 **`for no key update`** 로 번역됨(Hibernate 6.6.22) — 상호 배제는 성립하므로 그대로 두고 문서에 근거를 기록. 본문 `findById` 가 DB 재조회 없음도 요청 2,000건 : 조회 2,000건으로 확인 |
 | 2026-09-11 | 4 | 완료. `docs/optimistic-lock.md`, `W2OptimisticLockStrategy`, `version` 컬럼, 재시도 카운터. 9 tests 0 failures. SQL 로그로 재시도 폭주 확인 — 발급 101건에 조건부 UPDATE 2,205건(충돌 2,104), **발급 1건당 21.8회**. 2단계 열린 쟁점(미달 발급)은 요청이 재고의 10배라 발생하지 않음을 확인하고 닫음 |
 | 2026-09-12 | 5 | 완료. `docs/distributed-lock.md`, `W3DistributedLockStrategy`, `RedissonConfig`, `LOCK_TIMEOUT`(503), 테스트용 Redis 컨테이너. 12 tests 0 failures. Redisson 은 4.x 가 Netty 4.2 를 요구해 Boot 3.5 와 맞는 **3.52.0** 채택. `redis-cli MONITOR` 로 확인 — 획득 1,877건에 락 스크립트 5,103회(**획득 1건당 시도 2.7회**, 비공정), JVM 당 구독 1개, **watchdog 연장 1,175회** — 획득마다 10초 타이머를 걸고 해제 시 취소하지 않는 `RenewalTask` 구조. 요청 경로 밖이라 지연에는 안 들어가지만 Redis 명령 수 해석 시 참고. 초과 시 응답은 추천했던 429 를 503 으로 정정 |
+| 2026-09-12 | 6 | 완료. `docs/redis-atomic.md`, `W4RedisAtomicStrategy`(Lua 2개: 발급·적재), `W4DbSyncWorker`(W4 일 때만 생성), 큐 길이 게이지·반영 카운터, `run-experiment.ps1` 에 W4 반영 대기 단계와 `runs.tsv` 의 `reflect_wait_s` 열, 브리프 **D-06** 신설(13장 항목 닫음). 15 tests 0 failures — W4 NFR-01 0.5초 (W0 4.6 / W3 5.5). 컨텍스트 5개 × 풀 30 이 테스트 PostgreSQL 의 max_connections 100 을 넘어 `@DirtiesContext(AFTER_CLASS)` 로 전략별 컨텍스트를 닫음. MONITOR 로 확인 — **요청당 Redis 왕복 1회, 요청 경로 DB 접근 0**. 적재 경쟁 관측: 빈 Redis 첫 요청에 64 스레드가 전부 DB 를 읽음(적재는 `EXISTS` 로 1회). spike 첫 순간 200건 — 고치지 않고 관측 |

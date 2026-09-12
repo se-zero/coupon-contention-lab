@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.GenericContainer;
@@ -31,6 +32,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 구현을 그대로 따라 쓰지 않고 요구사항 자체를 검증한다. (작업 규칙 8)
  * 다중 인스턴스에서 W0 가 깨지는 것은 2단계 실험에서 확인하며 여기서는 다루지 않는다.
  */
+// 전략마다 컨텍스트가 따로 뜨고 각각 커넥션 30 을 쥔다. 캐시에 남기면 5 × 30 이 max_connections 100 을 넘는다
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 public abstract class AbstractIssueConcurrencyTest {
 
     private static final long COUPON_ID = 1L;
@@ -69,6 +72,10 @@ public abstract class AbstractIssueConcurrencyTest {
     // 하위 클래스가 선언한 전략 식별자 ("W0" ~ "W4")
     protected abstract String expectedStrategy();
 
+    // DB 반영이 비동기인 전략(W4)이 판정 전에 수렴을 기다리는 지점. 동기 전략은 할 일이 없다
+    protected void awaitConvergence() {
+    }
+
     @BeforeEach
     void resetData() {
         jdbc.execute("TRUNCATE coupon_issue, coupon RESTART IDENTITY CASCADE");
@@ -96,6 +103,7 @@ public abstract class AbstractIssueConcurrencyTest {
                 issued.incrementAndGet();
             }
         });
+        awaitConvergence();
 
         int actualRows = countIssues();
         int counterValue = counterValue();
@@ -116,6 +124,7 @@ public abstract class AbstractIssueConcurrencyTest {
                 issued.incrementAndGet();
             }
         });
+        awaitConvergence();
 
         assertThat(issued.get()).isEqualTo(1);
         assertThat(countIssues()).isEqualTo(1);

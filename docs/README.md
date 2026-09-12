@@ -22,7 +22,7 @@
 - [x] [비관적 락 (`SELECT ... FOR UPDATE`)](pessimistic-lock.md) — W1
 - [x] [낙관적 락 (버전 조건부 UPDATE)](optimistic-lock.md) — W2
 - [x] [분산 락 (Redisson `RLock`)](distributed-lock.md) — W3
-- [ ] Redis 단일 스레드 모델과 Lua 원자성 — W4
+- [x] [Redis 단일 스레드 모델과 Lua 원자성](redis-atomic.md) — W4
 
 ### 읽기 경로 (실험 B)
 
