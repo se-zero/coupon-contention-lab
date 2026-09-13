@@ -64,6 +64,7 @@ foreach ($d in @($rawDir, $logDir, $intDir)) {
 $summaryJson = Join-Path $rawDir "$tag.json"
 $k6Log = Join-Path $logDir "$tag.txt"
 $chaosLog = Join-Path $logDir "$tag.chaos.txt"
+$appLog = Join-Path $logDir "$tag.app.txt"
 $integrityOut = Join-Path $intDir "$tag.txt"
 
 Write-Host "=== [$tag] 시작 ===" -ForegroundColor Cyan
@@ -151,6 +152,10 @@ if ($Scenario -ne 'chaos') {
 }
 $elapsed = [math]::Round(((Get-Date) - $startedAt).TotalSeconds, 1)
 
+# 앱 로그 보존 - 5xx 의 예외 클래스는 여기에만 남는다. 컨테이너는 다음 실행에서 재생성되어 사라진다
+Invoke-Native { docker compose -f "$root\docker-compose.yml" logs --no-color --no-log-prefix app } |
+    Out-File -FilePath $appLog -Encoding utf8
+
 # k6 종료 코드: 0=통과, 99=임계값 미달, 그 외=실행 실패
 # 임계값 미달은 측정 결과이지 실행 실패가 아니므로 구분한다.
 # 콘솔에 뜨는 "thresholds ... have been crossed" 는 k6 가 stderr 로 쓰는 정상 알림이다
@@ -167,13 +172,14 @@ $reflectWait = ''
 if ($Strategy -eq 'W4') {
     Write-Host '[5/6] W4 반영 대기 (큐가 빌 때까지)' -ForegroundColor Cyan
     $waitStart = Get-Date
-    $waitDeadline = (Get-Date).AddMinutes(10)
+    # soak 뒤에는 큐가 수백만까지 쌓인다 (ramp 10분에 130만, 비우는 데 5분 반). 30분이면 soak 도 비운다
+    $waitDeadline = (Get-Date).AddMinutes(30)
     while ($true) {
         $len = [int](Invoke-Native {
             docker compose -f "$root\docker-compose.yml" exec -T redis redis-cli LLEN coupon:w4:queue
         })
         if ($len -eq 0) { break }
-        if ((Get-Date) -gt $waitDeadline) { throw "10분 안에 반영이 끝나지 않았다 (남은 큐 $len)" }
+        if ((Get-Date) -gt $waitDeadline) { throw "30분 안에 반영이 끝나지 않았다 (남은 큐 $len)" }
         Start-Sleep -Seconds 1
     }
     $reflectWait = [math]::Round(((Get-Date) - $waitStart).TotalSeconds, 1)
@@ -208,7 +214,8 @@ if (-not (Test-Path $indexFile)) {
 $commit = Invoke-Native { git -C $root rev-parse --short HEAD 2>$null }
 if (-not $commit) { $commit = 'uncommitted' }
 # 커밋 안 된 변경이 있으면 표시한다 - "같은 커밋으로 측정했다" 는 확인이 이 열에 기대기 때문이다 (conditions.md)
-elseif (Invoke-Native { git -C $root status --porcelain 2>$null }) { $commit = "$commit-dirty" }
+# 추적 파일만 본다. 결과 파일(raw/, log/, runs.tsv)은 git 이 모르는 파일이라 포함하면 첫 실행부터 dirty 가 된다
+elseif (Invoke-Native { git -C $root status --porcelain --untracked-files=no 2>$null }) { $commit = "$commit-dirty" }
 "$($startedAt.ToString('s'))`t$Strategy`t$Scenario`t$Run`t$PoolSize`t$elapsed`t$thresholds`t$reflectWait`t$k6Issued`t$dbRows`t$serverError`t$commit" |
     Out-File -FilePath $indexFile -Encoding utf8 -Append
 
@@ -216,6 +223,7 @@ Write-Host "=== [$tag] 완료 — 임계값 $thresholds, ${elapsed}초 ===" -For
 Write-Host "  요약  $summaryJson"
 Write-Host "  로그  $k6Log"
 Write-Host "  정합성 $integrityOut"
+Write-Host "  앱 로그 $appLog"
 if ($Scenario -eq 'chaos') { Write-Host "  chaos  $chaosLog" }
 
 # git rev-parse 등 앞선 네이티브 호출의 종료 코드가 스크립트 결과로 새지 않게 한다

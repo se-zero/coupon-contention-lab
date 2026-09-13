@@ -41,7 +41,7 @@ docker compose up -d --build
 | 쿠폰 | id | 재고 | 용도 |
 |---|---|---|---|
 | `spike-coupon` | 1 | 100,000 | spike / chaos — 소진시켜 NFR-01/02/04 검증 |
-| `sustained-coupon` | 2 | 5,000,000 | ramp / soak — 소진되지 않음 |
+| `sustained-coupon` | 2 | 20,000,000 | ramp / soak — 소진되지 않음 |
 
 ### 3. 부하 실행
 

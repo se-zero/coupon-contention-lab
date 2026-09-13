@@ -23,7 +23,7 @@ docker compose --profile loadtest run --rm k6 run /scripts/scenarios/spike.js
 | 파일 | 검증 | 대상 쿠폰 | 단계 |
 |---|---|---|---|
 | `spike.js` | NFR-01~04 | `spike-coupon` (재고 100,000) | 1·2단계 |
-| `ramp.js` | NFR-03 (꺾이는 지점) | `sustained-coupon` (재고 5,000,000) | 1단계 |
+| `ramp.js` | NFR-03 (꺾이는 지점) | `sustained-coupon` (재고 20,000,000) | 1단계 |
 | `soak.js` | NFR-06 (시간축 열화) | `sustained-coupon` | 1단계 |
 
 `chaos.js`(NFR-05)는 Redis가 쓰기 경로에 들어오는 **2주차(W3/W4 구현)** 에 추가한다.
