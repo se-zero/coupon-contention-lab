@@ -23,11 +23,11 @@ function nextUserId(offset) {
     return offset + exec.scenario.iterationInTest + 1;
 }
 
-function post(couponId, userId) {
+function post(couponId, userId, tags) {
     const res = http.post(
         `${BASE_URL}/api/coupons/${couponId}/issue`,
         JSON.stringify({ userId }),
-        { headers: { 'Content-Type': 'application/json' }, tags: { name: 'issue' } },
+        { headers: { 'Content-Type': 'application/json' }, tags: Object.assign({ name: 'issue' }, tags) },
     );
 
     if (res.status >= 500) {
@@ -41,9 +41,9 @@ function post(couponId, userId) {
     else if (result === 'DUPLICATE') duplicated.add(1);
 }
 
-// 측정 구간 발급
-export function issueOnce(couponId) {
-    post(couponId, nextUserId(0));
+// 측정 구간 발급. tags 는 시나리오가 구간을 나눌 때 쓴다 (ramp 의 stage)
+export function issueOnce(couponId, tags) {
+    post(couponId, nextUserId(0), tags);
 }
 
 // 워밍업 구간 발급 (JIT 컴파일 유도, 측정에서 제외)
