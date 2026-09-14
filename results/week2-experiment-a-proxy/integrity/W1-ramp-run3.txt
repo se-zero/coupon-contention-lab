@@ -1,0 +1,6 @@
+﻿ id |       name       | total_quantity | counter_value | actual_rows | over_issue | counter_drift | duplicate_users 
+----+------------------+----------------+---------------+-------------+------------+---------------+-----------------
+  1 | spike-coupon     |         100000 |             0 |           0 |          0 |             0 |               0
+  2 | sustained-coupon |       20000000 |        164165 |      164165 |          0 |             0 |               0
+(2 rows)
+

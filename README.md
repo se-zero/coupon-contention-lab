@@ -46,8 +46,10 @@ docker compose up -d --build
 ### 3. 부하 실행
 
 ```powershell
-k6 run loadtest/scenarios/spike.js
+docker compose --profile loadtest run --rm k6 run /scripts/scenarios/spike.js
 ```
+
+k6 는 **compose 네트워크 안에서** 돌린다 (확정값 D-09). 호스트의 k6 로 `localhost:8080` 을 때리면 Docker Desktop 의 포트 프록시가 1,000 VU 동시 연결을 일부 거부하고 처리량을 30% 깎는다.
 
 Grafana의 **"실험 A — 쓰기 경로"** 대시보드에서 처리량 / P99 / HikariCP `pending` 을 함께 본다.
 

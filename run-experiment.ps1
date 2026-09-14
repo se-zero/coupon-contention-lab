@@ -104,14 +104,22 @@ Write-Host '[3/6] DB / Redis 초기화' -ForegroundColor Cyan
 Invoke-Native { & "$root\seed\reset.ps1" } | Out-Null
 
 # ── 4. 부하 실행 ───────────────────────────────────────────────────────
-Write-Host '[4/6] k6 실행' -ForegroundColor Cyan
-$k6Args = @('run', '--no-color', "--summary-export=$summaryJson")
+# k6 는 compose 네트워크 안의 컨테이너로 돈다 (확정값 D-09). 호스트에서 돌리면 Docker Desktop 의
+# Windows 포트 프록시가 1,000 VU 동시 연결의 일부를 거부하고 처리량을 30% 깎는다 (conditions.md 한계 10)
+Write-Host '[4/6] k6 실행 (컨테이너)' -ForegroundColor Cyan
+$k6Image = 'grafana/k6:1.6.1'
+$k6Network = 'coupon-experiment_default'
+$k6Args = @('run', '--rm', '--network', $k6Network,
+    '-v', "$($root -replace '\\', '/')/loadtest:/scripts:ro",
+    '-v', "$($rawDir -replace '\\', '/'):/out",
+    '-e', 'BASE_URL=http://app:8080',
+    $k6Image, 'run', '--no-color', "--summary-export=/out/$tag.json")
 foreach ($e in $K6Env) { $k6Args += @('-e', $e) }
-$k6Args += "$root\loadtest\scenarios\$Scenario.js"
+$k6Args += "/scripts/scenarios/$Scenario.js"
 
 $startedAt = Get-Date
 if ($Scenario -ne 'chaos') {
-    Invoke-Native { & k6 @k6Args } | Tee-Object -FilePath $k6Log
+    Invoke-Native { & docker @k6Args } | Tee-Object -FilePath $k6Log
     $k6Exit = $LASTEXITCODE
 } else {
     # chaos - k6 를 백그라운드로 두고 발급 수를 지켜보다가 Redis 를 죽였다 살린다 (확정값 D-07)
@@ -119,7 +127,7 @@ if ($Scenario -ne 'chaos') {
     # 한쪽은 매진 후, 한쪽은 판매 중이 된다
     $chaosDowntimeSec = 10
     $k6Err = "$k6Log.stderr"
-    $proc = Start-Process -FilePath 'k6' -ArgumentList $k6Args -NoNewWindow -PassThru `
+    $proc = Start-Process -FilePath 'docker' -ArgumentList $k6Args -NoNewWindow -PassThru `
         -RedirectStandardOutput $k6Log -RedirectStandardError $k6Err
     $null = $proc.Handle   # 핸들을 미리 잡아두지 않으면 종료 뒤 ExitCode 가 비어 있다 (PS 5.1)
     # 앱의 발급 카운터는 워밍업(다른 쿠폰)도 센다. chaos 시나리오가 시작되는 시점(chaos.js startTime 35s)의
@@ -152,8 +160,18 @@ if ($Scenario -ne 'chaos') {
 }
 $elapsed = [math]::Round(((Get-Date) - $startedAt).TotalSeconds, 1)
 
-# 앱 로그 보존 - 5xx 의 예외 클래스는 여기에만 남는다. 컨테이너는 다음 실행에서 재생성되어 사라진다
-Invoke-Native { docker compose -f "$root\docker-compose.yml" logs --no-color --no-log-prefix app } |
+# 앱 로그 - 5xx 의 예외 클래스는 여기에만 남는다 (컨테이너는 다음 실행에서 재생성되어 사라진다).
+# 전체 로그는 수백 MB 라 보관하지 않고, 예외 클래스별 건수와 ERROR/WARN 앞부분만 남긴다
+$appErrLines = @(Invoke-Native {
+    docker compose -f "$root\docker-compose.yml" logs --no-color --no-log-prefix app |
+        findstr /C:"unexpected error" /C:" ERROR " /C:" WARN "
+})
+$byClass = $appErrLines | ForEach-Object { if ($_ -match 'unexpected error: (\S+)') { $Matches[1] } } |
+    Group-Object | Sort-Object Count -Descending
+@("unexpected_error_total`t$([int](($byClass | Measure-Object -Property Count -Sum).Sum))") +
+    @($byClass | ForEach-Object { "$($_.Name)`t$($_.Count)" }) +
+    @('', '--- first ERROR/WARN lines ---') +
+    @($appErrLines | Select-Object -First 30) |
     Out-File -FilePath $appLog -Encoding utf8
 
 # k6 종료 코드: 0=통과, 99=임계값 미달, 그 외=실행 실패

@@ -137,7 +137,8 @@ services:
 
   # 컨테이너로 부하를 줄 때만 사용 (네이티브 k6 로도 동일하게 실행 가능)
   k6:
-    image: grafana/k6:0.53.0
+    # 측정은 run-experiment.ps1 이 같은 이미지를 docker run 으로 띄운다 (D-09). 수동 실행용
+    image: grafana/k6:1.6.1
     container_name: coupon-k6
     profiles: [ loadtest ]
     environment:

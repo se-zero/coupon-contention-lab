@@ -13,6 +13,7 @@ results/
     ├── log/W0-spike-run1.txt    # k6 터미널 출력
     ├── integrity/W0-spike-run1.txt  # verify.sql 출력 (NFR-01/02 판정)
     └── summary.md               # 3회 평균·편차 표 + 해석
+└── week2-experiment-a-proxy/    # 조건이 달랐던 첫 41회 (호스트 k6, 프록시 경유). 정식 아님 — 규칙 2
 ```
 
 파일명은 `<전략>-<시나리오>-run<회차>` 로 고정한다.
