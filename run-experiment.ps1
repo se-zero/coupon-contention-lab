@@ -233,8 +233,11 @@ if (-not (Test-Path $indexFile)) {
 $commit = Invoke-Native { git -C $root rev-parse --short HEAD 2>$null }
 if (-not $commit) { $commit = 'uncommitted' }
 # 커밋 안 된 변경이 있으면 표시한다 - "같은 커밋으로 측정했다" 는 확인이 이 열에 기대기 때문이다 (conditions.md)
-# 추적 파일만 본다. 결과 파일(raw/, log/, runs.tsv)은 git 이 모르는 파일이라 포함하면 첫 실행부터 dirty 가 된다
-elseif (Invoke-Native { git -C $root status --porcelain --untracked-files=no 2>$null }) { $commit = "$commit-dirty" }
+# 측정 경로만 본다. results/ 를 포함하면 배치의 첫 실행이 runs.tsv 에 한 줄 붙이는 순간
+# 그 뒤 실행이 전부 dirty 로 기록된다 - 정작 알고 싶은 것은 측정 코드가 커밋됐는지다
+elseif (Invoke-Native {
+    git -C $root status --porcelain --untracked-files=no -- app loadtest seed infra docker-compose.yml run-experiment.ps1 run-week2.ps1 2>$null
+}) { $commit = "$commit-dirty" }
 "$($startedAt.ToString('s'))`t$Strategy`t$Scenario`t$Run`t$PoolSize`t$elapsed`t$thresholds`t$reflectWait`t$k6Issued`t$dbRows`t$serverError`t$commit" |
     Out-File -FilePath $indexFile -Encoding utf8 -Append
 
