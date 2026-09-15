@@ -10,10 +10,14 @@
 #   .\run-week2.ps1 -Phase ramp1     # 약 1시간. 끝나면 500ms 판정선을 검토한다 (계획서 8단계)
 #   .\run-week2.ps1 -Phase rest      # 나머지 36회, 약 8시간. 무인
 #   .\run-week2.ps1                  # 전부 (all)
+#   .\run-week2.ps1 -Phase soak-extra -SoakExtra W1,W2   # soak 우하향 전략만 2·3회차 (D-05)
 
 param(
-    [ValidateSet('ramp1', 'rest', 'all')]
+    [ValidateSet('ramp1', 'rest', 'all', 'soak-extra')]
     [string]$Phase = 'all',
+
+    # soak-extra 전용 - 1회 스크리닝에서 우하향이 관측된 전략 (확정값 D-05)
+    [string[]]$SoakExtra = @(),
 
     [string]$Week = 'week2-experiment-a'
 )
@@ -33,6 +37,11 @@ function Add-Runs([string]$scenario, [string[]]$targets, [int[]]$runs) {
 }
 if ($Phase -in @('ramp1', 'all')) {
     Add-Runs 'ramp' $strategies @(1)
+}
+# soak 1회 스크리닝에서 우하향이 나온 전략만 2·3회차를 채운다 (확정값 D-05)
+if ($Phase -eq 'soak-extra') {
+    if (-not $SoakExtra) { throw '-SoakExtra 로 전략을 지정해야 한다 (예: -SoakExtra W1,W2)' }
+    Add-Runs 'soak' $SoakExtra @(2, 3)
 }
 if ($Phase -in @('rest', 'all')) {
     Add-Runs 'ramp'  $strategies @(2, 3)
