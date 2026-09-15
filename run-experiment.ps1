@@ -190,14 +190,15 @@ $reflectWait = ''
 if ($Strategy -eq 'W4') {
     Write-Host '[5/6] W4 반영 대기 (큐가 빌 때까지)' -ForegroundColor Cyan
     $waitStart = Get-Date
-    # soak 뒤에는 큐가 수백만까지 쌓인다 (ramp 10분에 130만, 비우는 데 5분 반). 30분이면 soak 도 비운다
-    $waitDeadline = (Get-Date).AddMinutes(30)
+    # soak 뒤에는 큐가 수백만까지 쌓인다. 2주차 정식 측정에서 30분 soak 뒤 큐 890만, 비우는 데 39분
+    # (워커 3,850건/초). 30분 상한은 그 실행을 무효 처리했다 — 실측의 2배 이상으로 잡는다
+    $waitDeadline = (Get-Date).AddMinutes(90)
     while ($true) {
         $len = [int](Invoke-Native {
             docker compose -f "$root\docker-compose.yml" exec -T redis redis-cli LLEN coupon:w4:queue
         })
         if ($len -eq 0) { break }
-        if ((Get-Date) -gt $waitDeadline) { throw "30분 안에 반영이 끝나지 않았다 (남은 큐 $len)" }
+        if ((Get-Date) -gt $waitDeadline) { throw "90분 안에 반영이 끝나지 않았다 (남은 큐 $len)" }
         Start-Sleep -Seconds 1
     }
     $reflectWait = [math]::Round(((Get-Date) - $waitStart).TotalSeconds, 1)
