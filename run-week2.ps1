@@ -40,8 +40,12 @@ if ($Phase -in @('ramp1', 'all')) {
 }
 # soak 1회 스크리닝에서 우하향이 나온 전략만 2·3회차를 채운다 (확정값 D-05)
 if ($Phase -eq 'soak-extra') {
-    if (-not $SoakExtra) { throw '-SoakExtra 로 전략을 지정해야 한다 (예: -SoakExtra W1,W2)' }
-    Add-Runs 'soak' $SoakExtra @(2, 3)
+    # powershell.exe -File 로 넘기면 "W1,W2" 가 한 덩어리 문자열로 들어온다. 직접 쪼갠다
+    $targets = @($SoakExtra | ForEach-Object { $_ -split ',' } | Where-Object { $_ })
+    if (-not $targets) { throw '-SoakExtra 로 전략을 지정해야 한다 (예: -SoakExtra W1,W2)' }
+    $unknown = @($targets | Where-Object { $_ -notin $strategies })
+    if ($unknown) { throw "알 수 없는 전략: $($unknown -join ', ')" }
+    Add-Runs 'soak' $targets @(2, 3)
 }
 if ($Phase -in @('rest', 'all')) {
     Add-Runs 'ramp'  $strategies @(2, 3)
