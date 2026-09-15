@@ -1,0 +1,34 @@
+﻿unexpected_error_total	251
+WriteRedisConnectionException	251
+
+--- first ERROR/WARN lines ---
+2026-09-15T00:07:47.311Z ERROR 1 --- [coupon-experiment] [io-8080-exec-55] c.e.coupon.api.GlobalExceptionHandler    : unexpected error: WriteRedisConnectionException
+2026-09-15T00:07:47.539Z ERROR 1 --- [coupon-experiment] [o-8080-exec-126] c.e.coupon.api.GlobalExceptionHandler    : unexpected error: WriteRedisConnectionException
+2026-09-15T00:07:47.769Z ERROR 1 --- [coupon-experiment] [io-8080-exec-28] c.e.coupon.api.GlobalExceptionHandler    : unexpected error: WriteRedisConnectionException
+2026-09-15T00:07:47.814Z ERROR 1 --- [coupon-experiment] [o-8080-exec-156] c.e.coupon.api.GlobalExceptionHandler    : unexpected error: WriteRedisConnectionException
+2026-09-15T00:07:47.906Z ERROR 1 --- [coupon-experiment] [io-8080-exec-22] c.e.coupon.api.GlobalExceptionHandler    : unexpected error: WriteRedisConnectionException
+2026-09-15T00:07:47.906Z ERROR 1 --- [coupon-experiment] [o-8080-exec-170] c.e.coupon.api.GlobalExceptionHandler    : unexpected error: WriteRedisConnectionException
+2026-09-15T00:07:47.906Z ERROR 1 --- [coupon-experiment] [io-8080-exec-94] c.e.coupon.api.GlobalExceptionHandler    : unexpected error: WriteRedisConnectionException
+2026-09-15T00:07:47.953Z ERROR 1 --- [coupon-experiment] [o-8080-exec-113] c.e.coupon.api.GlobalExceptionHandler    : unexpected error: WriteRedisConnectionException
+2026-09-15T00:07:47.952Z ERROR 1 --- [coupon-experiment] [o-8080-exec-182] c.e.coupon.api.GlobalExceptionHandler    : unexpected error: WriteRedisConnectionException
+2026-09-15T00:07:47.953Z ERROR 1 --- [coupon-experiment] [nio-8080-exec-9] c.e.coupon.api.GlobalExceptionHandler    : unexpected error: WriteRedisConnectionException
+2026-09-15T00:07:47.952Z ERROR 1 --- [coupon-experiment] [o-8080-exec-108] c.e.coupon.api.GlobalExceptionHandler    : unexpected error: WriteRedisConnectionException
+2026-09-15T00:07:47.952Z ERROR 1 --- [coupon-experiment] [o-8080-exec-151] c.e.coupon.api.GlobalExceptionHandler    : unexpected error: WriteRedisConnectionException
+2026-09-15T00:07:47.952Z ERROR 1 --- [coupon-experiment] [o-8080-exec-179] c.e.coupon.api.GlobalExceptionHandler    : unexpected error: WriteRedisConnectionException
+2026-09-15T00:07:47.952Z ERROR 1 --- [coupon-experiment] [io-8080-exec-68] c.e.coupon.api.GlobalExceptionHandler    : unexpected error: WriteRedisConnectionException
+2026-09-15T00:07:47.952Z ERROR 1 --- [coupon-experiment] [o-8080-exec-131] c.e.coupon.api.GlobalExceptionHandler    : unexpected error: WriteRedisConnectionException
+2026-09-15T00:07:47.999Z ERROR 1 --- [coupon-experiment] [o-8080-exec-130] c.e.coupon.api.GlobalExceptionHandler    : unexpected error: WriteRedisConnectionException
+2026-09-15T00:07:47.999Z ERROR 1 --- [coupon-experiment] [io-8080-exec-87] c.e.coupon.api.GlobalExceptionHandler    : unexpected error: WriteRedisConnectionException
+2026-09-15T00:07:48.000Z ERROR 1 --- [coupon-experiment] [o-8080-exec-186] c.e.coupon.api.GlobalExceptionHandler    : unexpected error: WriteRedisConnectionException
+2026-09-15T00:07:48.005Z ERROR 1 --- [coupon-experiment] [nio-8080-exec-7] c.e.coupon.api.GlobalExceptionHandler    : unexpected error: WriteRedisConnectionException
+2026-09-15T00:07:48.005Z ERROR 1 --- [coupon-experiment] [io-8080-exec-91] c.e.coupon.api.GlobalExceptionHandler    : unexpected error: WriteRedisConnectionException
+2026-09-15T00:07:48.007Z ERROR 1 --- [coupon-experiment] [io-8080-exec-72] c.e.coupon.api.GlobalExceptionHandler    : unexpected error: WriteRedisConnectionException
+2026-09-15T00:07:48.006Z ERROR 1 --- [coupon-experiment] [io-8080-exec-30] c.e.coupon.api.GlobalExceptionHandler    : unexpected error: WriteRedisConnectionException
+2026-09-15T00:07:48.000Z ERROR 1 --- [coupon-experiment] [o-8080-exec-150] c.e.coupon.api.GlobalExceptionHandler    : unexpected error: WriteRedisConnectionException
+2026-09-15T00:07:47.999Z ERROR 1 --- [coupon-experiment] [io-8080-exec-86] c.e.coupon.api.GlobalExceptionHandler    : unexpected error: WriteRedisConnectionException
+2026-09-15T00:07:48.001Z ERROR 1 --- [coupon-experiment] [io-8080-exec-15] c.e.coupon.api.GlobalExceptionHandler    : unexpected error: WriteRedisConnectionException
+2026-09-15T00:07:48.006Z ERROR 1 --- [coupon-experiment] [io-8080-exec-81] c.e.coupon.api.GlobalExceptionHandler    : unexpected error: WriteRedisConnectionException
+2026-09-15T00:07:48.000Z ERROR 1 --- [coupon-experiment] [o-8080-exec-174] c.e.coupon.api.GlobalExceptionHandler    : unexpected error: WriteRedisConnectionException
+2026-09-15T00:07:48.002Z ERROR 1 --- [coupon-experiment] [io-8080-exec-85] c.e.coupon.api.GlobalExceptionHandler    : unexpected error: WriteRedisConnectionException
+2026-09-15T00:07:48.005Z ERROR 1 --- [coupon-experiment] [o-8080-exec-166] c.e.coupon.api.GlobalExceptionHandler    : unexpected error: WriteRedisConnectionException
+2026-09-15T00:07:48.002Z ERROR 1 --- [coupon-experiment] [o-8080-exec-114] c.e.coupon.api.GlobalExceptionHandler    : unexpected error: WriteRedisConnectionException

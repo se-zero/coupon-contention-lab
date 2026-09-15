@@ -1,0 +1,36 @@
+﻿unexpected_error_total	209
+RedisException	178
+RedisTimeoutException	30
+RedisResponseTimeoutException	1
+
+--- first ERROR/WARN lines ---
+2026-09-15T00:02:18.398Z ERROR 1 --- [coupon-experiment] [io-8080-exec-20] c.e.coupon.api.GlobalExceptionHandler    : unexpected error: RedisResponseTimeoutException
+2026-09-15T00:02:21.093Z ERROR 1 --- [coupon-experiment] [sson-netty-1-14] org.redisson.renewal.LockTask            : Can't update locks [] expiration
+2026-09-15T00:02:21.139Z ERROR 1 --- [coupon-experiment] [isson-timer-4-1] org.redisson.renewal.LockTask            : Can't update locks [] expiration
+2026-09-15T00:02:21.229Z ERROR 1 --- [coupon-experiment] [isson-timer-4-1] org.redisson.renewal.LockTask            : Can't update locks [] expiration
+2026-09-15T00:02:21.274Z ERROR 1 --- [coupon-experiment] [isson-timer-4-1] org.redisson.renewal.LockTask            : Can't update locks [] expiration
+2026-09-15T00:02:21.318Z ERROR 1 --- [coupon-experiment] [isson-timer-4-1] org.redisson.renewal.LockTask            : Can't update locks [] expiration
+2026-09-15T00:02:21.363Z ERROR 1 --- [coupon-experiment] [isson-timer-4-1] org.redisson.renewal.LockTask            : Can't update locks [] expiration
+2026-09-15T00:02:21.364Z ERROR 1 --- [coupon-experiment] [isson-timer-4-1] org.redisson.renewal.LockTask            : Can't update locks [] expiration
+2026-09-15T00:02:21.365Z ERROR 1 --- [coupon-experiment] [isson-timer-4-1] org.redisson.renewal.LockTask            : Can't update locks [] expiration
+2026-09-15T00:02:21.365Z ERROR 1 --- [coupon-experiment] [isson-timer-4-1] org.redisson.renewal.LockTask            : Can't update locks [] expiration
+2026-09-15T00:02:21.409Z ERROR 1 --- [coupon-experiment] [isson-timer-4-1] org.redisson.renewal.LockTask            : Can't update locks [] expiration
+2026-09-15T00:02:21.454Z ERROR 1 --- [coupon-experiment] [isson-timer-4-1] org.redisson.renewal.LockTask            : Can't update locks [] expiration
+2026-09-15T00:02:21.455Z ERROR 1 --- [coupon-experiment] [isson-timer-4-1] org.redisson.renewal.LockTask            : Can't update locks [] expiration
+2026-09-15T00:02:21.498Z ERROR 1 --- [coupon-experiment] [isson-timer-4-1] org.redisson.renewal.LockTask            : Can't update locks [] expiration
+2026-09-15T00:02:21.544Z ERROR 1 --- [coupon-experiment] [isson-timer-4-1] org.redisson.renewal.LockTask            : Can't update locks [] expiration
+2026-09-15T00:02:21.545Z ERROR 1 --- [coupon-experiment] [isson-timer-4-1] org.redisson.renewal.LockTask            : Can't update locks [] expiration
+2026-09-15T00:02:21.545Z ERROR 1 --- [coupon-experiment] [isson-timer-4-1] org.redisson.renewal.LockTask            : Can't update locks [] expiration
+2026-09-15T00:02:21.588Z ERROR 1 --- [coupon-experiment] [isson-timer-4-1] org.redisson.renewal.LockTask            : Can't update locks [] expiration
+2026-09-15T00:02:21.590Z ERROR 1 --- [coupon-experiment] [isson-timer-4-1] org.redisson.renewal.LockTask            : Can't update locks [] expiration
+2026-09-15T00:02:21.590Z ERROR 1 --- [coupon-experiment] [isson-timer-4-1] org.redisson.renewal.LockTask            : Can't update locks [] expiration
+2026-09-15T00:02:21.591Z ERROR 1 --- [coupon-experiment] [isson-timer-4-1] org.redisson.renewal.LockTask            : Can't update locks [] expiration
+2026-09-15T00:02:21.592Z ERROR 1 --- [coupon-experiment] [isson-timer-4-1] org.redisson.renewal.LockTask            : Can't update locks [] expiration
+2026-09-15T00:02:21.592Z ERROR 1 --- [coupon-experiment] [isson-timer-4-1] org.redisson.renewal.LockTask            : Can't update locks [] expiration
+2026-09-15T00:02:21.633Z ERROR 1 --- [coupon-experiment] [isson-timer-4-1] org.redisson.renewal.LockTask            : Can't update locks [] expiration
+2026-09-15T00:02:21.634Z ERROR 1 --- [coupon-experiment] [isson-timer-4-1] org.redisson.renewal.LockTask            : Can't update locks [] expiration
+2026-09-15T00:02:21.635Z ERROR 1 --- [coupon-experiment] [isson-timer-4-1] org.redisson.renewal.LockTask            : Can't update locks [] expiration
+2026-09-15T00:02:21.635Z ERROR 1 --- [coupon-experiment] [isson-timer-4-1] org.redisson.renewal.LockTask            : Can't update locks [] expiration
+2026-09-15T00:02:21.636Z ERROR 1 --- [coupon-experiment] [isson-timer-4-1] org.redisson.renewal.LockTask            : Can't update locks [] expiration
+2026-09-15T00:02:21.678Z ERROR 1 --- [coupon-experiment] [isson-timer-4-1] org.redisson.renewal.LockTask            : Can't update locks [] expiration
+2026-09-15T00:02:21.679Z ERROR 1 --- [coupon-experiment] [isson-timer-4-1] org.redisson.renewal.LockTask            : Can't update locks [] expiration

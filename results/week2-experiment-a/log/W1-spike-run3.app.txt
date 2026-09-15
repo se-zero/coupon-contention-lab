@@ -1,0 +1,31 @@
+﻿unexpected_error_total	9
+CannotCreateTransactionException	9
+
+--- first ERROR/WARN lines ---
+2026-09-14T19:22:45.313Z  WARN 1 --- [coupon-experiment] [o-8080-exec-154] o.h.engine.jdbc.spi.SqlExceptionHelper   : SQL Error: 0, SQLState: null
+2026-09-14T19:22:45.313Z ERROR 1 --- [coupon-experiment] [o-8080-exec-154] o.h.engine.jdbc.spi.SqlExceptionHelper   : coupon-pool - Connection is not available, request timed out after 3000ms (total=30, active=30, idle=0, waiting=169)
+2026-09-14T19:22:45.319Z ERROR 1 --- [coupon-experiment] [o-8080-exec-154] c.e.coupon.api.GlobalExceptionHandler    : unexpected error: CannotCreateTransactionException
+2026-09-14T19:22:45.380Z  WARN 1 --- [coupon-experiment] [o-8080-exec-177] o.h.engine.jdbc.spi.SqlExceptionHelper   : SQL Error: 0, SQLState: null
+2026-09-14T19:22:45.381Z ERROR 1 --- [coupon-experiment] [o-8080-exec-177] o.h.engine.jdbc.spi.SqlExceptionHelper   : coupon-pool - Connection is not available, request timed out after 3000ms (total=30, active=30, idle=0, waiting=169)
+2026-09-14T19:22:45.382Z ERROR 1 --- [coupon-experiment] [o-8080-exec-177] c.e.coupon.api.GlobalExceptionHandler    : unexpected error: CannotCreateTransactionException
+2026-09-14T19:22:46.566Z  WARN 1 --- [coupon-experiment] [o-8080-exec-181] o.h.engine.jdbc.spi.SqlExceptionHelper   : SQL Error: 0, SQLState: null
+2026-09-14T19:22:46.566Z ERROR 1 --- [coupon-experiment] [o-8080-exec-181] o.h.engine.jdbc.spi.SqlExceptionHelper   : coupon-pool - Connection is not available, request timed out after 3000ms (total=30, active=30, idle=0, waiting=169)
+2026-09-14T19:22:46.567Z ERROR 1 --- [coupon-experiment] [o-8080-exec-181] c.e.coupon.api.GlobalExceptionHandler    : unexpected error: CannotCreateTransactionException
+2026-09-14T19:22:51.025Z  WARN 1 --- [coupon-experiment] [io-8080-exec-43] o.h.engine.jdbc.spi.SqlExceptionHelper   : SQL Error: 0, SQLState: null
+2026-09-14T19:22:51.025Z ERROR 1 --- [coupon-experiment] [io-8080-exec-43] o.h.engine.jdbc.spi.SqlExceptionHelper   : coupon-pool - Connection is not available, request timed out after 3000ms (total=30, active=30, idle=0, waiting=170)
+2026-09-14T19:22:51.026Z ERROR 1 --- [coupon-experiment] [io-8080-exec-43] c.e.coupon.api.GlobalExceptionHandler    : unexpected error: CannotCreateTransactionException
+2026-09-14T19:22:56.249Z  WARN 1 --- [coupon-experiment] [o-8080-exec-162] o.h.engine.jdbc.spi.SqlExceptionHelper   : SQL Error: 0, SQLState: null
+2026-09-14T19:22:56.249Z ERROR 1 --- [coupon-experiment] [o-8080-exec-162] o.h.engine.jdbc.spi.SqlExceptionHelper   : coupon-pool - Connection is not available, request timed out after 3000ms (total=30, active=30, idle=0, waiting=169)
+2026-09-14T19:22:56.250Z ERROR 1 --- [coupon-experiment] [o-8080-exec-162] c.e.coupon.api.GlobalExceptionHandler    : unexpected error: CannotCreateTransactionException
+2026-09-14T19:22:57.098Z  WARN 1 --- [coupon-experiment] [io-8080-exec-50] o.h.engine.jdbc.spi.SqlExceptionHelper   : SQL Error: 0, SQLState: null
+2026-09-14T19:22:57.103Z ERROR 1 --- [coupon-experiment] [io-8080-exec-50] o.h.engine.jdbc.spi.SqlExceptionHelper   : coupon-pool - Connection is not available, request timed out after 3000ms (total=30, active=30, idle=0, waiting=169)
+2026-09-14T19:22:57.104Z ERROR 1 --- [coupon-experiment] [io-8080-exec-50] c.e.coupon.api.GlobalExceptionHandler    : unexpected error: CannotCreateTransactionException
+2026-09-14T19:22:57.169Z  WARN 1 --- [coupon-experiment] [o-8080-exec-188] o.h.engine.jdbc.spi.SqlExceptionHelper   : SQL Error: 0, SQLState: null
+2026-09-14T19:22:57.170Z ERROR 1 --- [coupon-experiment] [o-8080-exec-188] o.h.engine.jdbc.spi.SqlExceptionHelper   : coupon-pool - Connection is not available, request timed out after 3000ms (total=30, active=30, idle=0, waiting=169)
+2026-09-14T19:22:57.172Z ERROR 1 --- [coupon-experiment] [o-8080-exec-188] c.e.coupon.api.GlobalExceptionHandler    : unexpected error: CannotCreateTransactionException
+2026-09-14T19:22:57.189Z  WARN 1 --- [coupon-experiment] [o-8080-exec-185] o.h.engine.jdbc.spi.SqlExceptionHelper   : SQL Error: 0, SQLState: null
+2026-09-14T19:22:57.189Z ERROR 1 --- [coupon-experiment] [o-8080-exec-185] o.h.engine.jdbc.spi.SqlExceptionHelper   : coupon-pool - Connection is not available, request timed out after 3000ms (total=30, active=30, idle=0, waiting=169)
+2026-09-14T19:22:57.190Z ERROR 1 --- [coupon-experiment] [o-8080-exec-185] c.e.coupon.api.GlobalExceptionHandler    : unexpected error: CannotCreateTransactionException
+2026-09-14T19:23:01.273Z  WARN 1 --- [coupon-experiment] [o-8080-exec-141] o.h.engine.jdbc.spi.SqlExceptionHelper   : SQL Error: 0, SQLState: null
+2026-09-14T19:23:01.273Z ERROR 1 --- [coupon-experiment] [o-8080-exec-141] o.h.engine.jdbc.spi.SqlExceptionHelper   : coupon-pool - Connection is not available, request timed out after 3000ms (total=30, active=30, idle=0, waiting=169)
+2026-09-14T19:23:01.275Z ERROR 1 --- [coupon-experiment] [o-8080-exec-141] c.e.coupon.api.GlobalExceptionHandler    : unexpected error: CannotCreateTransactionException
