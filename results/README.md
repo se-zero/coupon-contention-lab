@@ -51,4 +51,5 @@ Grafana 화면은 매번 캡처하지 않는다. Prometheus 보존 기간을 30�
 | `week1-measurement-setup/` | 측정 환경 구축 검증, W0 기준선 관측 | — |
 | `week2-experiment-a/` | 실험 A 1단계 — W0~W4 성능 측정 | 단일 인스턴스 |
 | `week3-experiment-a-stage2/` | 실험 A 2단계 — 3 인스턴스 정합성 | 3 인스턴스 |
+| `week3-soak-followup/` | 2주차 soak 계단 하락 후속 — DB 계측 + W3 3회 | 단일 인스턴스 |
 | `week3-experiment-b/` | 실험 B — C0~C4 캐시 | 단일 인스턴스 |
