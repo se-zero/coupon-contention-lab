@@ -151,7 +151,7 @@ W0(로컬 락)와 W3(분산 락)는 **인스턴스 수가 늘어날 때 갈라�
 - **성능은 측정하지 않는다.** spike 부하를 준 뒤 아래 두 개만 센다.
   - 초과 발급 건수 (NFR-01)
   - 중복 발급 건수 (NFR-02)
-- 구성: `docker compose up --scale app=3` + nginx 라운드로빈
+- 구성: 오버레이 `docker-compose.scale.yml` — `app` ×2 (`--scale app=2`) + `app-worker` ×1 (W4 워커 전용, D-06) + nginx 라운드로빈. **총 3대**
 - 기대 결과표:
 
 | 전략 | 1 인스턴스 | 3 인스턴스 |
@@ -219,7 +219,7 @@ C1의 DB QPS 그래프에 **60초 간격 톱니 스파이크**가 찍히고, C2/
 Docker Compose로 전체 스택을 한 번에 띄운다.
 
 ```
-app          : Spring Boot (Java 21)   -- 2단계에서만 --scale app=3
+app          : Spring Boot (Java 21)   -- 2단계에서만 3대 (app x2 + app-worker x1, docker-compose.scale.yml)
 nginx        : 2단계 전용 라운드로빈 로드밸런서
 postgres     : 주 데이터 저장소
 redis        : 캐시 + 분산 락 + 원자 연산
@@ -292,7 +292,7 @@ grafana      : 대시보드
 4. 실험 A 비교 그래프 (동시성 축 vs 처리량 / P99 / 커넥션 대기)
 5. 실험 B 비교 그래프 (시간 축 vs DB QPS, 스파이크 비교)
 6. 각 전략의 트레이드오프 정리 표
-7. 재현 방법 (`docker compose up` 및 `--scale app=3` 커맨드, k6 실행법)
+7. 재현 방법 (`docker compose up` 및 3대 스택 커맨드, k6 실행법)
 
 > README에서 그래프보다 **해석**이 더 길어야 한다. 그래프는 누구나 뽑지만, "왜 이 지점에서 꺾였는가"는 설명해야 남는다.
 

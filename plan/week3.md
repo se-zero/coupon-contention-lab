@@ -102,7 +102,7 @@ PostgreSQL Read Committed 는 락 대기 뒤 최신 행으로 **WHERE 만** 다�
 
 ---
 
-#### [ ] 1단계 — 3 인스턴스 스택 <sub>반나절</sub>
+#### [x] 1단계 — 3 인스턴스 스택 ✅ <sub>반나절</sub>
 
 기존 `docker-compose.yml` 은 건드리지 않고 **오버레이 파일** `docker-compose.scale.yml` 을 겹친다. 1단계 명령(`docker compose up -d`)이 그대로 동작해야 한다 (작업 규칙 5).
 
@@ -332,3 +332,4 @@ C0~C4 × 3회 = 15회.
 |---|---|---|
 | 2026-09-16 | — | 3주차 계획 수립. W0 붕괴의 기전(더티 체킹 절대값 UPDATE 의 갱신 손실)과 규모(수천~수만 건, `counter_drift` 큰 음수)를 검증 대상으로 적음. 인스턴스 수 3 고정 추천. W4 워커 다중 실행이 `trim` 으로 유실을 만든다는 점을 확인해 토글 필요성을 기록 |
 | 2026-09-17 | 0 | 완료. 브리프 **D-10**(인스턴스 3 고정) 신설, 13장 항목 닫음, `results/week3-experiment-a-stage2/conditions.md` 생성, `results/README.md` 폴더 표에 `week3-soak-followup/` 추가. `--scale app=3` 표기 정리는 구성이 확정되는 1단계로 옮김 |
+| 2026-09-17 | 1 | 완료 (sonnet sub-agent 구현, 검토 후 반영). `docker-compose.scale.yml`(app ×2 포트 해제·풀 10·워커 off, `app-worker` 이미지 재사용·워커 on, nginx 1.27.5), `infra/nginx/nginx.conf`, `coupon.w4.worker-enabled`(`@ConditionalOnBooleanProperty`, Boot 3.5), Prometheus dns_sd 에 `app-worker`, `--scale app=3` 표기 5곳 정정. 검증: nginx 경유 30건 → instance 3종 **10/10/10**, Prometheus 타겟 3 up, W4 20건 → DB 20행 · `reflected_total` 은 app-worker 에서만 20, 오버레이 없이 `up -d` 이전과 동일, 15 tests 0 failures. **계획에 없던 수정 1건**: nginx 기본 `Host $proxy_host` 가 upstream 이름 `coupon_app`(밑줄)을 그대로 보내 Tomcat 이 전부 400 → `proxy_set_header Host $host` 추가. 메모리 실측 idle 기준 JVM 3대 2,282MiB, 전체 2,624MiB (한도 11.5GiB) |

@@ -1,7 +1,7 @@
 # 실험 스택 (PROJECT_BRIEF 7장)
 #
 # 1단계(성능)  : docker compose up -d
-# 2단계(정합성): docker compose --profile scale up -d --scale app=3   ← 3주차
+# 2단계(정합성): docker compose -f docker-compose.yml -f docker-compose.scale.yml up -d --scale app=2   ← 3주차
 # 부하 실행    : docker compose --profile loadtest run --rm k6 run /scripts/scenarios/spike.js
 
 name: coupon-experiment

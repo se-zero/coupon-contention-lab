@@ -1,0 +1,52 @@
+# 2단계(정합성) 전용 오버레이 — 3 인스턴스 스택 (PROJECT_BRIEF 5.3, D-10)
+#
+# docker compose -f docker-compose.yml -f docker-compose.scale.yml up -d --scale app=2
+#
+# app ×2(replica) + app-worker ×1(W4 워커 전용) + nginx 라운드로빈 = 총 3대, 풀 10×3=30 (D-01)
+
+name: coupon-experiment
+
+services:
+  app:
+    # 3대가 호스트 8080 을 나눠 쓸 수 없다
+    ports: !reset []
+    environment:
+      DB_POOL_SIZE: 10
+      COUPON_W4_WORKER: "false"
+
+  # W4 워커 전용 인스턴스 (D-06) — app 과 이미지·환경·헬스체크 동일, 워커 토글만 다르다
+  app-worker:
+    image: coupon-experiment-app
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: coupon
+      DB_USER: coupon
+      DB_PASSWORD: coupon
+      DB_POOL_SIZE: 10
+      COUPON_STRATEGY: ${COUPON_STRATEGY:-W0}
+      REDIS_HOST: redis
+      COUPON_W4_WORKER: "true"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8081/actuator/health" ]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 30s
+
+  nginx:
+    image: nginx:1.27-alpine
+    volumes:
+      - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "8080:8080"
+    depends_on:
+      app:
+        condition: service_healthy
+      app-worker:
+        condition: service_healthy

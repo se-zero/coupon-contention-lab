@@ -4,6 +4,7 @@ import com.experiment.coupon.metrics.IssueMetrics;
 import org.redisson.api.RList;
 import org.redisson.api.RedissonClient;
 import org.redisson.client.codec.StringCodec;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -23,9 +24,12 @@ import java.util.Map;
  * 순서: 읽기 -> INSERT 묶음 + 카운터 증가 -> 커밋 -> 큐에서 제거.
  * 커밋 전에 죽으면 다음 주기에 같은 항목을 다시 쓴다 (at-least-once).
  * 그때의 중복 INSERT 는 ON CONFLICT 가 흡수한다.
+ *
+ * 다중 인스턴스에서 둘 이상 돌면 커밋 후 trim 이 서로의 미처리 항목을 지워 유실된다 (D-06).
  */
 @Component
 @ConditionalOnProperty(name = "coupon.strategy", havingValue = "W4")
+@ConditionalOnBooleanProperty(name = "coupon.w4.worker-enabled", matchIfMissing = true)
 public class W4DbSyncWorker {
 
     // 확정: 100ms 마다 최대 500건. 1주차 W0 기준 100ms 에 26건이므로 쌓이면 그것도 결과다

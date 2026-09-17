@@ -4,14 +4,14 @@ global:
   evaluation_interval: 15s
 
 scrape_configs:
-  # 애플리케이션 — dns_sd 로 붙여야 --scale app=3 에서 3대가 모두 수집된다
+  # 애플리케이션 — dns_sd 로 붙여야 2단계(오버레이 + --scale app=2 + app-worker)에서 3대가 모두 수집된다
   # 포트 8081 은 관리 전용 커넥터다. 8080 을 긁으면 부하 구간에서 타임아웃된다
   - job_name: coupon-app
     metrics_path: /actuator/prometheus
     scrape_interval: 1s
     scrape_timeout: 1s
     dns_sd_configs:
-      - names: [ app ]
+      - names: [ app, app-worker ]
         type: A
         port: 8081
 

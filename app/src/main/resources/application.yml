@@ -49,6 +49,9 @@ coupon:
   strategy: ${COUPON_STRATEGY:W0}
   # 2단계 인스턴스 식별자
   instance-id: ${INSTANCE_ID:${HOSTNAME:app-local}}
+  w4:
+    # W4 반영 워커 기동 여부 — 다중 인스턴스에서는 한 대만 true (D-06)
+    worker-enabled: ${COUPON_W4_WORKER:true}
 
 management:
   server:
