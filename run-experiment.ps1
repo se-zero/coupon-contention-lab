@@ -6,7 +6,7 @@
 # 사용법:
 #   .\run-experiment.ps1 -Strategy W0 -Scenario spike -Run 1
 #   .\run-experiment.ps1 -Strategy W1 -Scenario ramp  -Run 2 -K6Env HOLD=1m
-#   .\run-experiment.ps1 -Strategy W0 -Scenario spike -Run 1 -PoolSize 10 -Week week3-experiment-a-stage2
+#   .\run-experiment.ps1 -Strategy W0 -Scenario spike -Run 1 -Instances 3 -Week week3-experiment-a-stage2
 #   .\run-experiment.ps1 -Strategy W4 -Scenario chaos -Run 1 -K6Env VUS=200,TOTAL=20000 -ChaosKillAt 5000
 
 param(
@@ -22,8 +22,9 @@ param(
     # 결과가 쌓일 주차 폴더
     [string]$Week = 'week2-experiment-a',
 
-    # 커넥션 총량 (확정값 D-01: 1단계 30, 2단계 인스턴스당 10)
-    [int]$PoolSize = 30,
+    # 인스턴스 수 (확정값 D-10: 2단계는 3 고정). 풀은 30 / Instances 로 계산한다 (D-01) - 따로 넘기다 어긋나는 사고를 막는다
+    [ValidateSet(1, 3)]
+    [int]$Instances = 1,
 
     # k6 에 넘길 추가 변수 (예: VUS=500,TOTAL=50000) - 축소 실행용. 정식 측정은 기본값(D-02)을 쓴다
     [string[]]$K6Env = @(),
@@ -34,6 +35,21 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
+
+# 2단계(3대) 안전장치 - 결과 폴더와 시나리오를 강제한다 (작업 규칙 5, D-09)
+if ($Instances -eq 3 -and $Week -eq 'week2-experiment-a') {
+    throw '-Instances 3 인데 -Week 가 기본값(week2-experiment-a)이다 - 2단계 결과가 1단계 폴더에 섞인다. -Week 를 지정해라'
+}
+if ($Instances -eq 3 -and $Scenario -eq 'chaos') {
+    throw '-Instances 3 은 chaos 를 지원하지 않는다 - chaos 는 2단계 대상이 아니고 Get-IssuedCount 가 호스트 8081 을 읽는다'
+}
+
+# 풀 크기는 인스턴스 수에서 계산한다 (확정값 D-01: 총 30)
+$pool = 30 / $Instances
+
+# 2단계는 오버레이(docker-compose.scale.yml)를 겹친다 - 이후 모든 docker compose 호출이 이 집합을 쓴다
+$composeArgs = @('-f', "$root\docker-compose.yml")
+if ($Instances -eq 3) { $composeArgs += @('-f', "$root\docker-compose.scale.yml") }
 
 # PowerShell 5.1 은 파이프에 걸린 네이티브 명령의 stderr 를 오류로 승격시킨다.
 # docker / k6 는 진행 상황을 stderr 로 쓰므로 정상 동작이 실행 실패로 둔갑한다.
@@ -68,35 +84,90 @@ $appLog = Join-Path $logDir "$tag.app.txt"
 $integrityOut = Join-Path $intDir "$tag.txt"
 
 Write-Host "=== [$tag] 시작 ===" -ForegroundColor Cyan
-Write-Host "  전략=$Strategy  시나리오=$Scenario  회차=$Run  풀=$PoolSize  주차=$Week"
+Write-Host "  전략=$Strategy  시나리오=$Scenario  회차=$Run  인스턴스=$Instances  풀=$pool  주차=$Week"
 
-# ── 1. 전략 적용 후 앱 재기동 ──────────────────────────────────────────
-Write-Host '[1/6] 전략 적용 + 앱 재기동' -ForegroundColor Cyan
+# ── 1. 전략 적용 후 스택 기동 ──────────────────────────────────────────
+Write-Host '[1/6] 전략 적용 + 스택 기동' -ForegroundColor Cyan
 $env:COUPON_STRATEGY = $Strategy
-$env:DB_POOL_SIZE = $PoolSize
-Invoke-Native { docker compose -f "$root\docker-compose.yml" up -d --force-recreate app } | Out-Null
+$env:DB_POOL_SIZE = $pool
+if ($Instances -eq 3) {
+    # app ×2(replica) + app-worker ×1 = 3대. nginx 는 [2/6] 에서 앱이 healthy 해진 뒤에 재기동한다
+    Invoke-Native { docker compose @composeArgs up -d --force-recreate --scale app=2 app app-worker } | Out-Null
+} else {
+    Invoke-Native { docker compose @composeArgs up -d --force-recreate app } | Out-Null
+}
 
 # ── 2. 기동 대기 ───────────────────────────────────────────────────────
 Write-Host '[2/6] 헬스체크 대기' -ForegroundColor Cyan
-$deadline = (Get-Date).AddMinutes(3)
-$ready = $false
-while ((Get-Date) -lt $deadline) {
-    try {
-        Invoke-WebRequest -Uri 'http://localhost:8081/actuator/health' -UseBasicParsing -TimeoutSec 3 | Out-Null
-        $ready = $true; break
-    } catch { Start-Sleep -Seconds 3 }
-}
-if (-not $ready) { throw '앱이 3분 안에 기동하지 않았다' }
+$instanceIds = @()
+if ($Instances -eq 3) {
+    # 3대는 호스트 8081 이 없다 - 컨테이너 ID로 각자의 헬스와 전략을 확인한다
+    # app / app-worker 를 따로 조회해 순서를 보장한다 (순서: app 들, 그 다음 app-worker - per_instance 열 순서와 맞춘다)
+    $appIds = @(Invoke-Native { docker compose @composeArgs ps -q app })
+    $workerIds = @(Invoke-Native { docker compose @composeArgs ps -q app-worker })
+    $instanceIds = $appIds + $workerIds
+    if ($instanceIds.Count -ne 3) { throw "app/app-worker 컨테이너가 3개가 아니라 $($instanceIds.Count)개다" }
 
-# 실제 적용된 전략 확인 (설정 오타로 다른 전략을 측정하는 사고 방지)
-# 메트릭의 공통 태그를 읽는다 - 읽기 전용이라 데이터를 건드리지 않는다
-$metrics = (Invoke-WebRequest -Uri 'http://localhost:8081/actuator/prometheus' -UseBasicParsing -TimeoutSec 10).Content
-if ($metrics -match 'strategy="([^"]+)"') {
-    $applied = $Matches[1]
-    if ($applied -ne $Strategy) { throw "요청한 전략은 $Strategy 인데 실제 적용된 것은 $applied 다" }
-    Write-Host "      적용 확인: strategy=$applied"
+    $deadline = (Get-Date).AddMinutes(3)
+    $allHealthy = $false
+    while ((Get-Date) -lt $deadline) {
+        $bad = 0
+        foreach ($id in $instanceIds) {
+            $status = Invoke-Native { docker inspect --format '{{.State.Health.Status}}' $id }
+            if ($status -ne 'healthy') { $bad++ }
+        }
+        if ($bad -eq 0) { $allHealthy = $true; break }
+        Start-Sleep -Seconds 3
+    }
+    if (-not $allHealthy) { throw '앱 3대가 3분 안에 healthy 가 되지 않았다' }
+
+    # 실제 적용된 전략 확인 (설정 오타로 다른 전략을 측정하는 사고 방지) - 3대 모두 요청한 전략과 같아야 한다
+    # curl 출력은 수천 줄이라 배열로 캡처된다 - 배열에 -match 를 쓰면 $Matches 가 채워지지 않으므로 한 문자열로 합친다
+    $strategies = @()
+    foreach ($id in $instanceIds) {
+        $text = (Invoke-Native { docker exec $id curl -s localhost:8081/actuator/prometheus }) -join "`n"
+        if ($text -match 'strategy="([^"]+)"') { $strategies += $Matches[1] }
+        else { throw "컨테이너 $id 에서 strategy 태그를 찾지 못했다" }
+    }
+    $mismatch = @($strategies | Where-Object { $_ -ne $Strategy })
+    if ($mismatch) { throw "요청한 전략은 $Strategy 인데 3대의 적용 전략은 $($strategies -join ', ') 다" }
+    Write-Host "      적용 확인 (3대): strategy=$Strategy"
+
+    # nginx 는 기동 시점에 DNS 를 푼다 - 앱을 재생성한 뒤에는 재기동해야 죽은 주소를 안 가리킨다
+    # --scale app=2 를 다시 안 주면 nginx 가 app 을 의존성으로 끌어들이며 compose 가 scale 을 파일 기본값(1)로
+    # 되돌려 app-2 를 지운다 (--scale 은 up 호출 사이에 유지되지 않는다) - 실측으로 확인한 버그
+    Invoke-Native { docker compose @composeArgs up -d --force-recreate --scale app=2 nginx } | Out-Null
+    $nginxDeadline = (Get-Date).AddSeconds(30)
+    $nginxReady = $false
+    while ((Get-Date) -lt $nginxDeadline) {
+        try {
+            Invoke-WebRequest -Uri 'http://localhost:8080/api/coupons/1' -UseBasicParsing -TimeoutSec 3 | Out-Null
+            $nginxReady = $true; break
+        } catch { Start-Sleep -Seconds 2 }
+    }
+    if (-not $nginxReady) { throw 'nginx 재기동 뒤 GET /api/coupons/1 이 200 을 주지 않는다' }
+    Write-Host '      nginx 재기동 확인: GET /api/coupons/1 -> 200'
 } else {
-    throw '메트릭에서 strategy 태그를 찾지 못했다'
+    $deadline = (Get-Date).AddMinutes(3)
+    $ready = $false
+    while ((Get-Date) -lt $deadline) {
+        try {
+            Invoke-WebRequest -Uri 'http://localhost:8081/actuator/health' -UseBasicParsing -TimeoutSec 3 | Out-Null
+            $ready = $true; break
+        } catch { Start-Sleep -Seconds 3 }
+    }
+    if (-not $ready) { throw '앱이 3분 안에 기동하지 않았다' }
+
+    # 실제 적용된 전략 확인 (설정 오타로 다른 전략을 측정하는 사고 방지)
+    # 메트릭의 공통 태그를 읽는다 - 읽기 전용이라 데이터를 건드리지 않는다
+    $metrics = (Invoke-WebRequest -Uri 'http://localhost:8081/actuator/prometheus' -UseBasicParsing -TimeoutSec 10).Content
+    if ($metrics -match 'strategy="([^"]+)"') {
+        $applied = $Matches[1]
+        if ($applied -ne $Strategy) { throw "요청한 전략은 $Strategy 인데 실제 적용된 것은 $applied 다" }
+        Write-Host "      적용 확인: strategy=$applied"
+    } else {
+        throw '메트릭에서 strategy 태그를 찾지 못했다'
+    }
 }
 
 # ── 3. DB / Redis 초기화 ───────────────────────────────────────────────
@@ -109,10 +180,11 @@ Invoke-Native { & "$root\seed\reset.ps1" } | Out-Null
 Write-Host '[4/6] k6 실행 (컨테이너)' -ForegroundColor Cyan
 $k6Image = 'grafana/k6:1.6.1'
 $k6Network = 'coupon-experiment_default'
+$baseUrl = if ($Instances -eq 3) { 'http://nginx:8080' } else { 'http://app:8080' }
 $k6Args = @('run', '--rm', '--network', $k6Network,
     '-v', "$($root -replace '\\', '/')/loadtest:/scripts:ro",
     '-v', "$($rawDir -replace '\\', '/'):/out",
-    '-e', 'BASE_URL=http://app:8080',
+    '-e', "BASE_URL=$baseUrl",
     $k6Image, 'run', '--no-color', "--summary-export=/out/$tag.json")
 foreach ($e in $K6Env) { $k6Args += @('-e', $e) }
 $k6Args += "/scripts/scenarios/$Scenario.js"
@@ -141,11 +213,11 @@ if ($Scenario -ne 'chaos') {
         $issued = (Get-IssuedCount) - $base
         if ($issued -ge $ChaosKillAt) {
             $killAt = Get-Date
-            Invoke-Native { docker compose -f "$root\docker-compose.yml" kill redis } | Out-Null
+            Invoke-Native { docker compose @composeArgs kill redis } | Out-Null
             "$($killAt.ToString('s'))`tkill`tissued=$issued" | Out-File -FilePath $chaosLog -Encoding utf8
             Write-Host "      Redis kill  $($killAt.ToString('HH:mm:ss'))  (발급 $issued 건)" -ForegroundColor Yellow
             Start-Sleep -Seconds $chaosDowntimeSec
-            Invoke-Native { docker compose -f "$root\docker-compose.yml" start redis } | Out-Null
+            Invoke-Native { docker compose @composeArgs start redis } | Out-Null
             $restartAt = Get-Date
             "$($restartAt.ToString('s'))`tstart`tdowntime_s=$chaosDowntimeSec" | Out-File -FilePath $chaosLog -Encoding utf8 -Append
             Write-Host "      Redis start $($restartAt.ToString('HH:mm:ss'))  (빈 상태로 재시작)" -ForegroundColor Yellow
@@ -162,8 +234,11 @@ $elapsed = [math]::Round(((Get-Date) - $startedAt).TotalSeconds, 1)
 
 # 앱 로그 - 5xx 의 예외 클래스는 여기에만 남는다 (컨테이너는 다음 실행에서 재생성되어 사라진다).
 # 전체 로그는 수백 MB 라 보관하지 않고, 예외 클래스별 건수와 ERROR/WARN 앞부분만 남긴다
+# @() 로 한 번 더 감싼다 - if/else 표현식 대입은 파이프라인을 거치므로 원소 1개짜리 배열이
+# 스칼라 문자열로 접혀버린다. 그 상태로 @logServices 스플랫하면 문자 단위로 쪼개진다 (실측 버그)
+$logServices = @(if ($Instances -eq 3) { @('app', 'app-worker') } else { @('app') })
 $appErrLines = @(Invoke-Native {
-    docker compose -f "$root\docker-compose.yml" logs --no-color --no-log-prefix app |
+    docker compose @composeArgs logs --no-color --no-log-prefix @logServices |
         findstr /C:"unexpected error" /C:" ERROR " /C:" WARN "
 })
 $byClass = $appErrLines | ForEach-Object { if ($_ -match 'unexpected error: (\S+)') { $Matches[1] } } |
@@ -195,7 +270,7 @@ if ($Strategy -eq 'W4') {
     $waitDeadline = (Get-Date).AddMinutes(90)
     while ($true) {
         $len = [int](Invoke-Native {
-            docker compose -f "$root\docker-compose.yml" exec -T redis redis-cli LLEN coupon:w4:queue
+            docker compose @composeArgs exec -T redis redis-cli LLEN coupon:w4:queue
         })
         if ($len -eq 0) { break }
         if ((Get-Date) -gt $waitDeadline) { throw "90분 안에 반영이 끝나지 않았다 (남은 큐 $len)" }
@@ -209,7 +284,7 @@ if ($Strategy -eq 'W4') {
 Write-Host '[6/6] NFR-01 / NFR-02 판정' -ForegroundColor Cyan
 Invoke-Native {
     Get-Content "$root\seed\verify.sql" -Raw -Encoding UTF8 |
-        docker compose -f "$root\docker-compose.yml" exec -T postgres psql -U coupon -d coupon -v ON_ERROR_STOP=1
+        docker compose @composeArgs exec -T postgres psql -U coupon -d coupon -v ON_ERROR_STOP=1
 } | Tee-Object -FilePath $integrityOut
 
 # ── k6 가 센 것과 DB 가 기억하는 것 ────────────────────────────────────
@@ -220,14 +295,48 @@ $k6Issued = 0; $serverError = 0
 if ($summary.metrics.coupon_issued) { $k6Issued = [int]$summary.metrics.coupon_issued.count }
 if ($summary.metrics.coupon_server_error) { $serverError = [int]$summary.metrics.coupon_server_error.count }
 $dbRows = [int](Invoke-Native {
-    docker compose -f "$root\docker-compose.yml" exec -T postgres psql -U coupon -d coupon -tA -c 'SELECT count(*) FROM coupon_issue'
+    docker compose @composeArgs exec -T postgres psql -U coupon -d coupon -tA -c 'SELECT count(*) FROM coupon_issue'
 })
 Write-Host "      k6 발급 $k6Issued / DB 행 $dbRows / 차이 $($k6Issued - $dbRows) / 5xx $serverError"
+
+# ── 인스턴스별 분배 · 앱 5xx 집계 ───────────────────────────────────────
+# per_instance: 각 인스턴스가 판정한 발급 요청 수 (coupon_issue_total, result 라벨 전부 합산) - 3대면 n1/n2/n3, 1대면 값 하나
+# app_5xx: 앱이 만든 5xx 응답 수 (http_server_requests_seconds_count). k6 의 coupon_server_error 와의 차이가 nginx 가 만든 5xx 다
+# curl 출력은 배열로 캡처되므로 한 문자열로 합쳐야 [regex]::Matches 가 동작한다
+$perInstanceCounts = @()
+$app5xxRaw = 0
+if ($Instances -eq 3) {
+    foreach ($id in $instanceIds) {
+        $text = (Invoke-Native { docker exec $id curl -s localhost:8081/actuator/prometheus }) -join "`n"
+        $issued = 0
+        foreach ($m in [regex]::Matches($text, 'coupon_issue_total\{[^}]*\}\s+([0-9.eE+\-]+)')) { $issued += [double]$m.Groups[1].Value }
+        $perInstanceCounts += [math]::Round($issued)
+        foreach ($m in [regex]::Matches($text, 'http_server_requests_seconds_count\{[^}]*status="5\d\d"[^}]*\}\s+([0-9.eE+\-]+)')) { $app5xxRaw += [double]$m.Groups[1].Value }
+    }
+} else {
+    $text = (Invoke-WebRequest -Uri 'http://localhost:8081/actuator/prometheus' -UseBasicParsing -TimeoutSec 10).Content
+    $issued = 0
+    foreach ($m in [regex]::Matches($text, 'coupon_issue_total\{[^}]*\}\s+([0-9.eE+\-]+)')) { $issued += [double]$m.Groups[1].Value }
+    $perInstanceCounts += [math]::Round($issued)
+    foreach ($m in [regex]::Matches($text, 'http_server_requests_seconds_count\{[^}]*status="5\d\d"[^}]*\}\s+([0-9.eE+\-]+)')) { $app5xxRaw += [double]$m.Groups[1].Value }
+}
+$app5xx = [int][math]::Round($app5xxRaw)
+$perInstance = $perInstanceCounts -join '/'
+$totalIssued = ($perInstanceCounts | Measure-Object -Sum).Sum
+Write-Host "      인스턴스별 처리 건수: $perInstance (합계 $totalIssued) / app_5xx $app5xx"
+if ($Instances -eq 3 -and $totalIssued -gt 0) {
+    for ($i = 0; $i -lt $perInstanceCounts.Count; $i++) {
+        $share = $perInstanceCounts[$i] / $totalIssued
+        if ($share -lt 0.25) {
+            Write-Host "      경고: 인스턴스 $($i + 1) 처리 비율 $([math]::Round($share * 100, 1))% (< 25%) - 3대 실험 유효성 기준 미달, summary 에서 제외 대상" -ForegroundColor Yellow
+        }
+    }
+}
 
 # ── 실행 이력 기록 ─────────────────────────────────────────────────────
 $indexFile = Join-Path $weekDir 'runs.tsv'
 if (-not (Test-Path $indexFile)) {
-    "timestamp`tstrategy`tscenario`trun`tpool`telapsed_s`tthresholds`treflect_wait_s`tk6_issued`tdb_rows`tserver_error`tcommit" |
+    "timestamp`tstrategy`tscenario`trun`tpool`telapsed_s`tthresholds`treflect_wait_s`tk6_issued`tdb_rows`tserver_error`tcommit`tinstances`tper_instance`tapp_5xx" |
         Out-File -FilePath $indexFile -Encoding utf8
 }
 $commit = Invoke-Native { git -C $root rev-parse --short HEAD 2>$null }
@@ -236,9 +345,9 @@ if (-not $commit) { $commit = 'uncommitted' }
 # 측정 경로만 본다. results/ 를 포함하면 배치의 첫 실행이 runs.tsv 에 한 줄 붙이는 순간
 # 그 뒤 실행이 전부 dirty 로 기록된다 - 정작 알고 싶은 것은 측정 코드가 커밋됐는지다
 elseif (Invoke-Native {
-    git -C $root status --porcelain --untracked-files=no -- app loadtest seed infra docker-compose.yml run-experiment.ps1 run-week2.ps1 2>$null
+    git -C $root status --porcelain --untracked-files=no -- app loadtest seed infra docker-compose.yml docker-compose.scale.yml run-experiment.ps1 run-week2.ps1 run-week3.ps1 2>$null
 }) { $commit = "$commit-dirty" }
-"$($startedAt.ToString('s'))`t$Strategy`t$Scenario`t$Run`t$PoolSize`t$elapsed`t$thresholds`t$reflectWait`t$k6Issued`t$dbRows`t$serverError`t$commit" |
+"$($startedAt.ToString('s'))`t$Strategy`t$Scenario`t$Run`t$pool`t$elapsed`t$thresholds`t$reflectWait`t$k6Issued`t$dbRows`t$serverError`t$commit`t$Instances`t$perInstance`t$app5xx" |
     Out-File -FilePath $indexFile -Encoding utf8 -Append
 
 Write-Host "=== [$tag] 완료 — 임계값 $thresholds, ${elapsed}초 ===" -ForegroundColor Green
