@@ -153,7 +153,7 @@ docker compose -f docker-compose.yml -f docker-compose.scale.yml up -d --scale a
 
 ---
 
-#### [ ] 3단계 — 스모크: W0 spike 정식 조건 1회 <sub>15분</sub>
+#### [x] 3단계 — 스모크: W0 spike 정식 조건 1회 ✅ <sub>15분</sub>
 
 정식 측정 전에 **기전이 실제로 작동하는지** 본다. 1장 예상 표의 세 열을 확인한다.
 
@@ -333,4 +333,5 @@ C0~C4 × 3회 = 15회.
 | 2026-09-16 | — | 3주차 계획 수립. W0 붕괴의 기전(더티 체킹 절대값 UPDATE 의 갱신 손실)과 규모(수천~수만 건, `counter_drift` 큰 음수)를 검증 대상으로 적음. 인스턴스 수 3 고정 추천. W4 워커 다중 실행이 `trim` 으로 유실을 만든다는 점을 확인해 토글 필요성을 기록 |
 | 2026-09-17 | 0 | 완료. 브리프 **D-10**(인스턴스 3 고정) 신설, 13장 항목 닫음, `results/week3-experiment-a-stage2/conditions.md` 생성, `results/README.md` 폴더 표에 `week3-soak-followup/` 추가. `--scale app=3` 표기 정리는 구성이 확정되는 1단계로 옮김 |
 | 2026-09-17 | 1 | 완료 (sonnet sub-agent 구현, 검토 후 반영). `docker-compose.scale.yml`(app ×2 포트 해제·풀 10·워커 off, `app-worker` 이미지 재사용·워커 on, nginx 1.27.5), `infra/nginx/nginx.conf`, `coupon.w4.worker-enabled`(`@ConditionalOnBooleanProperty`, Boot 3.5), Prometheus dns_sd 에 `app-worker`, `--scale app=3` 표기 5곳 정정. 검증: nginx 경유 30건 → instance 3종 **10/10/10**, Prometheus 타겟 3 up, W4 20건 → DB 20행 · `reflected_total` 은 app-worker 에서만 20, 오버레이 없이 `up -d` 이전과 동일, 15 tests 0 failures. **계획에 없던 수정 1건**: nginx 기본 `Host $proxy_host` 가 upstream 이름 `coupon_app`(밑줄)을 그대로 보내 Tomcat 이 전부 400 → `proxy_set_header Host $host` 추가. 메모리 실측 idle 기준 JVM 3대 2,282MiB, 전체 2,624MiB (한도 11.5GiB) |
+| 2026-09-18 | 3 | 완료 (직접, 분리 프로세스, 6.2분). **W0 는 3대에서 깨진다 — 예상보다 세게.** spike-coupon: `actual_rows` **150,000** / `over_issue` **50,000** / `counter_drift` **−99,461** / `duplicate_users` 0. 분배 51,254 / 51,255 / 51,252, 5xx 0, 미도달 0, k6 발급 = DB 행 = 153,761. **SOLD_OUT 응답 0건** — 카운터가 100,000 에 닿기 전에 요청 150,000 이 다 소진됐다. 손실률 L 로 환산하면 1 − 50,539/150,000 = **66%**, 1장의 "L > 1/3 이면 전부 발급" 구간이다. 기전(더티 체킹 절대값 UPDATE → 갱신 손실)은 세 열이 모두 지지한다. sustained-coupon(워밍업)도 drift −2,429 로 같은 기전. 결과 폐기 (`week3-smoke/` 삭제), 4단계는 `353b43a` 로 |
 | 2026-09-18 | 2 | 완료 (sonnet sub-agent 2회, 검토 후 반영). `run-experiment.ps1` 에 `-Instances 1|3` (풀 = 30 ÷ N, `-PoolSize` 제거), 안전장치 2개(3대인데 `-Week` 기본값 → throw, 3대 + chaos → throw), 3대 경로(오버레이 집합, `docker inspect` 헬스 대기, 컨테이너별 전략 확인, nginx 재기동 후 200 확인, k6 → `nginx:8080`), `runs.tsv` 15열(`instances` · `per_instance` · `app_5xx`, 25% 미만 경고). `run-week3.ps1` (`-Phase stage2 | soak-followup`, finally 에서 오버레이 해체). 축소 실행: 1대 W0 `8156` / 3대 W0 **8616/8619/8614** / 3대 W4 반영 1.1초 · drift 0 · `k6_issued − db_rows` 0. **실측으로 잡은 버그 3개**: ① nginx 재기동 시 `--scale app=2` 를 안 주면 compose 가 scale 을 1 로 되돌려 app-2 를 지움 ② PowerShell `if` 표현식 대입이 원소 1개 배열을 스칼라로 접어 스플랫이 문자 단위로 쪼개짐 ③ 배치 준비에서 기본 파일만으로 `up -d` 하면 재개 시 nginx 가 쥔 8080 과 충돌 → 오버레이 집합 `up -d --scale app=2` 한 번으로 교체. 첫 sub-agent 는 검증 (e) 에서 멈춰(stall) 내가 드라이스타트를 직접 돌리다 ③ 을 발견, 두 번째 sub-agent 가 수정·재개/초기 두 상태에서 재검증·정리 |
