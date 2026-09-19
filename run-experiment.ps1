@@ -67,6 +67,27 @@ function Get-IssuedCount {
     } catch { }
     return -1
 }
+# 정규식 대신 줄 단위로 파싱하는 이유 - uri 라벨 값에 {couponId} 같은 중괄호가 들어있어
+# "[^}]*}" 정규식이 라벨 집합의 닫는 중괄호가 아니라 그 안쪽 중괄호에서 멈춘다 (실측 버그, app_5xx 가 15회 전부 0 으로 기록됐다).
+# metric{labels} value 형태이므로 마지막 공백 뒤가 값이라는 점만 이용한다
+function Get-MetricSum {
+    param(
+        [Parameter(Mandatory)][string]$Text,
+        [Parameter(Mandatory)][string]$Prefix,   # 예: 'coupon_issue_total{'
+        [string]$Contains = ''                   # 라벨 부분에 포함돼야 하는 문자열 (예: 'status="5')
+    )
+    $sum = 0.0
+    foreach ($line in $Text -split "`n") {
+        $line = $line.Trim()
+        if (-not $line -or $line.StartsWith('#') -or -not $line.StartsWith($Prefix)) { continue }
+        if ($Contains -and $line -notlike "*$Contains*") { continue }
+        $sp = $line.LastIndexOf(' ')
+        if ($sp -lt 0) { continue }
+        $sum += [double]$line.Substring($sp + 1)
+    }
+    return $sum
+}
+
 $tag = "$Strategy-$Scenario-run$Run"
 
 $weekDir = Join-Path $root "results\$Week"
@@ -301,24 +322,21 @@ Write-Host "      k6 발급 $k6Issued / DB 행 $dbRows / 차이 $($k6Issued - $d
 
 # ── 인스턴스별 분배 · 앱 5xx 집계 ───────────────────────────────────────
 # per_instance: 각 인스턴스가 판정한 발급 요청 수 (coupon_issue_total, result 라벨 전부 합산) - 3대면 n1/n2/n3, 1대면 값 하나
-# app_5xx: 앱이 만든 5xx 응답 수 (http_server_requests_seconds_count). k6 의 coupon_server_error 와의 차이가 nginx 가 만든 5xx 다
-# curl 출력은 배열로 캡처되므로 한 문자열로 합쳐야 [regex]::Matches 가 동작한다
+# app_5xx: 앱이 만든 5xx 응답 수 (http_server_requests_seconds_count). k6 의 coupon_server_error 와의 차이가 nginx 가 만든 5xx 다.
+# 앱 로그 요약(log/*.app.txt)은 대체값으로 쓸 수 없다 - W3 의 503 LOCK_TIMEOUT 은 의도된 응답이라 예외 로그에 안 남는다
+# curl 출력은 배열로 캡처되므로 한 문자열로 합쳐야 Get-MetricSum 이 줄 단위로 나눌 수 있다
 $perInstanceCounts = @()
 $app5xxRaw = 0
 if ($Instances -eq 3) {
     foreach ($id in $instanceIds) {
         $text = (Invoke-Native { docker exec $id curl -s localhost:8081/actuator/prometheus }) -join "`n"
-        $issued = 0
-        foreach ($m in [regex]::Matches($text, 'coupon_issue_total\{[^}]*\}\s+([0-9.eE+\-]+)')) { $issued += [double]$m.Groups[1].Value }
-        $perInstanceCounts += [math]::Round($issued)
-        foreach ($m in [regex]::Matches($text, 'http_server_requests_seconds_count\{[^}]*status="5\d\d"[^}]*\}\s+([0-9.eE+\-]+)')) { $app5xxRaw += [double]$m.Groups[1].Value }
+        $perInstanceCounts += [math]::Round((Get-MetricSum -Text $text -Prefix 'coupon_issue_total{'))
+        $app5xxRaw += Get-MetricSum -Text $text -Prefix 'http_server_requests_seconds_count{' -Contains 'status="5'
     }
 } else {
     $text = (Invoke-WebRequest -Uri 'http://localhost:8081/actuator/prometheus' -UseBasicParsing -TimeoutSec 10).Content
-    $issued = 0
-    foreach ($m in [regex]::Matches($text, 'coupon_issue_total\{[^}]*\}\s+([0-9.eE+\-]+)')) { $issued += [double]$m.Groups[1].Value }
-    $perInstanceCounts += [math]::Round($issued)
-    foreach ($m in [regex]::Matches($text, 'http_server_requests_seconds_count\{[^}]*status="5\d\d"[^}]*\}\s+([0-9.eE+\-]+)')) { $app5xxRaw += [double]$m.Groups[1].Value }
+    $perInstanceCounts += [math]::Round((Get-MetricSum -Text $text -Prefix 'coupon_issue_total{'))
+    $app5xxRaw += Get-MetricSum -Text $text -Prefix 'http_server_requests_seconds_count{' -Contains 'status="5'
 }
 $app5xx = [int][math]::Round($app5xxRaw)
 $perInstance = $perInstanceCounts -join '/'
