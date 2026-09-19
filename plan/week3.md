@@ -203,7 +203,7 @@ docker compose -f docker-compose.yml -f docker-compose.scale.yml up -d --scale a
 
 > 후반의 결정 항목(4장)은 브리프 13장의 시점 규칙대로 **착수 직전**에 채운다. 그때 이 절을 보강한다. 지금 적는 것은 골격과 추천이다.
 
-#### [ ] 7단계 — 📄 캐시 기초 · 📄 TTL 과 캐시 스탬피드 <sub>반나절</sub>
+#### [x] 7단계 — 📄 캐시 기초 · 📄 TTL 과 캐시 스탬피드 ✅ <sub>반나절</sub>
 
 C0/C1 의 전제. Cache-Aside 가 무엇을 언제 DB 에 묻는지, 고정 TTL 이 왜 톱니를 만드는지, 그리고 스탬피드의 두 얼굴 — **키가 많아서**(동시 만료) 와 **키 하나가 뜨거워서**(동시 미스). 이 구분이 8단계의 키 수 결정과 C2/C3 의 역할 분담을 정한다.
 
@@ -217,6 +217,7 @@ C0/C1 의 전제. Cache-Aside 가 무엇을 언제 DB 에 묻는지, 고정 TTL 
 - **`CouponReadStrategy`** — C0~C4 동일 인터페이스, `COUPON_CACHE` 설정값. 쓰기 경로의 `CouponIssueStrategy` 와 같은 방식. 응답은 `CouponResponse` 그대로 — 5.4 의 공정성 규칙을 읽기 경로에도 적용한다
 - **C0** = 현행 `CouponQueryService` 경로 · **C1** = Redisson `RBucket` + TTL 60초 (D-11)
 - **메트릭 `coupon.cache`** — `hit` / `miss` / **`db_load`** (미스로 DB 를 실제로 읽은 횟수). 전 전략이 같은 카운터를 낸다 (C0 는 전부 db_load). 스크레이프가 1초라 **초당 db_load 가 그대로 "DB QPS"** 다. `pg_stat_statements` 의 해당 SELECT calls 로 교차 확인
+- **미스 전용 타이머** — `coupon.cache.load`(미스 후 DB 를 읽은 시간) · `coupon.cache.wait`(남이 채우기를 기다린 시간, C3) · `coupon.cache.wait.timeout`(상한 2초 도달 건수, D-13). **7단계에서 찾은 것** — 미스가 전체 요청의 1% 에 못 미쳐 **전체 P99 로는 C3 의 대가가 보이지 않는다** (`docs/cache-stampede.md` 7장). 브리프 6장의 "대기 요청의 P99" 는 이 분포로 본다
 - **시드** — 실험 B 용 쿠폰 **20개** (`seed.sql` 에 id 101~120 추가, D-12). 실험 A 의 쿠폰 1·2 는 건드리지 않는다
 - **k6 `stampede.js`** — 워밍업(전 키 1회 조회 → TTL 시계 시작) → **200 VU** constant-vus 읽기 부하 **5분** (D-12). 요청 생성은 `lib/read.js` 한 곳
 - **`run-cache.ps1`** — 초기화 → 앱 재기동(`COUPON_CACHE`) → 적용 확인 → k6 → runs.tsv. 정합성 판정 없음. 쓰기 전략은 W0 고정 (쓰기 요청이 없으므로 무관, conditions 에 기록)
@@ -333,6 +334,7 @@ C0~C4 × 3회 = 15회.
 | 2026-09-16 | — | 3주차 계획 수립. W0 붕괴의 기전(더티 체킹 절대값 UPDATE 의 갱신 손실)과 규모(수천~수만 건, `counter_drift` 큰 음수)를 검증 대상으로 적음. 인스턴스 수 3 고정 추천. W4 워커 다중 실행이 `trim` 으로 유실을 만든다는 점을 확인해 토글 필요성을 기록 |
 | 2026-09-17 | 0 | 완료. 브리프 **D-10**(인스턴스 3 고정) 신설, 13장 항목 닫음, `results/week3-experiment-a-stage2/conditions.md` 생성, `results/README.md` 폴더 표에 `week3-soak-followup/` 추가. `--scale app=3` 표기 정리는 구성이 확정되는 1단계로 옮김 |
 | 2026-09-17 | 1 | 완료 (sonnet sub-agent 구현, 검토 후 반영). `docker-compose.scale.yml`(app ×2 포트 해제·풀 10·워커 off, `app-worker` 이미지 재사용·워커 on, nginx 1.27.5), `infra/nginx/nginx.conf`, `coupon.w4.worker-enabled`(`@ConditionalOnBooleanProperty`, Boot 3.5), Prometheus dns_sd 에 `app-worker`, `--scale app=3` 표기 5곳 정정. 검증: nginx 경유 30건 → instance 3종 **10/10/10**, Prometheus 타겟 3 up, W4 20건 → DB 20행 · `reflected_total` 은 app-worker 에서만 20, 오버레이 없이 `up -d` 이전과 동일, 15 tests 0 failures. **계획에 없던 수정 1건**: nginx 기본 `Host $proxy_host` 가 upstream 이름 `coupon_app`(밑줄)을 그대로 보내 Tomcat 이 전부 400 → `proxy_set_header Host $host` 추가. 메모리 실측 idle 기준 JVM 3대 2,282MiB, 전체 2,624MiB (한도 11.5GiB) |
+| 2026-09-19 | 7 | 완료. `docs/cache-basics.md`(C0·C1 의 전제 — Cache-Aside 네 단계, 쓰기 세 방식, 사본이 든 값 중 `issuedCount`·`remaining` 은 변한다는 점, 미스와 히트의 비용 차이) · `docs/cache-stampede.md`(미스 창, 왜 다 같이 만료되는가, **두 얼굴** 표, 피크 크기는 TTL 과 무관, 히트율이 이 현상을 감추는 이유). **문서가 만든 결정 1건** — 미스가 전체 요청의 1% 에 못 미쳐 **전체 P99 로는 C3 의 대가가 안 보인다.** 8단계 메트릭에 미스 전용 타이머 3개(`load`·`wait`·`wait.timeout`) 추가. **예상을 미리 적었다**: 파동당 피크 C1 최대 **200**(20키 × 키당 독자 10) · C3 **20** · C2 초당 10 안팎 · C4 없음, 히트율은 다섯 전략 전부 99% 대라 변별력 없음. **한계 3개** 기록 — 워밍업이 동시 만료를 인위적으로 정렬한다(C1 은 최악값, C2 효과가 과대) · 닫힌 루프라 키당 동시 미스 상한이 10 이라 악순환은 재현 안 됨 · 무효화 스탬피드는 안 잰다 |
 | 2026-09-19 | 후반 결정 | 실험 B 착수 전 결정 3건을 브리프 12장에 확정 — **D-11** 캐시 클라이언트 Redisson `RBucket`(클라이언트를 늘리면 C0~C4 의 차이가 전략 차이인지 클라이언트 차이인지 분리되지 않는다 · 5.4), **D-12** 쿠폰 20종 · 200 VU · 5분 · TTL 60초 · 상세 API 만(키당 독자 10명이라 C2 의 만료 분산과 C3 의 단일 재계산이 **둘 다** 관측된다. 키 1개면 C2 가, 1,000개면 C3 가 할 일이 없다), **D-13** C3 는 **대기 · 상한 2초**(stale 즉시 반환은 6장의 관찰 포인트인 '대기 요청의 P99 악화' 를 0 으로 만들고, soft TTL 이 필요해지는 순간 C4 와 겹친다). 브리프 13장의 C3 항목을 닫았다. C2 지터 폭 J 와 C4 β 는 예정대로 9단계에서 정한다 |
 | 2026-09-19 | 후속 | `app_5xx` 러너 버그 수정 (sonnet sub-agent, 검토 후 함수명만 `Get-MetricSum` 으로 정정 — 이 파일의 다른 헬퍼와 같은 승인 동사). 원인은 `uri` 라벨 값의 `{couponId}` 중괄호 — 정규식 `[^}]*\}` 가 라벨 집합이 아니라 그 안쪽 중괄호에서 멈췄다. 정규식 4곳을 **줄 단위 파서 헬퍼 하나**로 통일(`metric{labels} value` 의 마지막 공백 뒤가 값). 검증: 같은 메트릭 본문에 옛 정규식 **0** vs 새 파서 **442** vs python 독립 파서 **442**, k6 `coupon_server_error` 442 와 일치. 종단 실행에서도 `app_5xx` 456 = k6 456, `per_instance` 회귀 없음. **재측정하지 않았다** — 기록만의 버그이고 실제 값은 Prometheus 에 있다. `week3-experiment-a-stage2/conditions.md` 한계 6번에 기록 |
 | 2026-09-19 | 6 (결론) | 완료. `results/week3-soak-followup/summary.md`. **짐작한 두 범인이 모두 무죄**: 체크포인트는 5분마다 규칙적이라 한 번짜리 계단을 못 만들고, autovacuum 은 4회 중 어디서도 하락 시점과 안 맞는다. 죽은 튜플 0 · 버퍼 히트율 1.00 · GC 0.3ms/s · 백엔드 32 고정. **W3 도 하락한다** — 2·3회차 −23.7% · −25.0%(둘 다 24.0분), 2주차의 '예외' 는 1회 측정의 착시였다. **실제로 떨어지는 것은 커밋 처리 능력**(초당 290 → 190)이고 홀딩 시간이 정확히 역수(1.45~1.57배)로 늘어난다. 결정적 증거는 하락 폭이 **발급 1건당 커밋 수** 순서라는 것 — W4 0.002회 −2.7% / 락 계열 1.0회 −25~34% / W2 13~18회 −79.6%. W2 의 초당 커밋 378 은 W0 의 379 와 같다(같은 천장을 나눠 쓴다). 남은 미지는 WAL fsync 지연이며 계측 범위 밖 — 브리프 3.4 의 로컬 환경 한계로 기록. 2주차 summary 6장에 후속 포인터 추가 |
