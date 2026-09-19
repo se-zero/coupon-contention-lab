@@ -1,0 +1,5 @@
+﻿timestamp	strategy	scenario	run	pool	elapsed_s	thresholds	reflect_wait_s	k6_issued	db_rows	server_error	commit	instances	per_instance	app_5xx
+2026-09-19T01:23:10	W3	soak	2	30	1837.9	FAIL		370734	370734	104	e654c38	1	370838	0
+2026-09-19T01:54:12	W3	soak	3	30	1837.3	FAIL		367444	367444	160	e654c38	1	367604	0
+2026-09-19T02:25:13	W0	soak	4	30	1837.3	FAIL		459884	459884	0	e654c38	1	459884	0
+2026-09-19T02:56:13	W1	soak	4	30	1837.7	FAIL		413977	413977	44	e654c38	1	413977	0
