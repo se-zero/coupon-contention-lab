@@ -1,0 +1,8 @@
+﻿unexpected_error_total	2
+AsyncRequestNotUsableException	2
+
+--- first ERROR/WARN lines ---
+2026-09-18T16:08:29.851Z ERROR 1 --- [coupon-experiment] [nio-8081-exec-1] c.e.coupon.api.GlobalExceptionHandler    : unexpected error: AsyncRequestNotUsableException
+2026-09-18T16:08:29.869Z  WARN 1 --- [coupon-experiment] [nio-8081-exec-1] .m.m.a.ExceptionHandlerExceptionResolver : Failure in @ExceptionHandler com.experiment.coupon.api.GlobalExceptionHandler#handleUnexpected(Exception)
+2026-09-18T16:08:31.050Z ERROR 1 --- [coupon-experiment] [nio-8081-exec-1] c.e.coupon.api.GlobalExceptionHandler    : unexpected error: AsyncRequestNotUsableException
+2026-09-18T16:08:31.093Z  WARN 1 --- [coupon-experiment] [nio-8081-exec-1] .m.m.a.ExceptionHandlerExceptionResolver : Failure in @ExceptionHandler com.experiment.coupon.api.GlobalExceptionHandler#handleUnexpected(Exception)

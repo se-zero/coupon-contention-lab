@@ -2,7 +2,7 @@
 
 > **목표** 전반: 실험 A 2단계 — 3 인스턴스 정합성 검증 (NFR-07) · 후반: 실험 B — C0~C4 구현 및 측정
 > **완료 기준** 전반: **1대 vs 3대 정합성 표 (W0 붕괴 확인)** · 후반: **스탬피드 재현 + 방어 효과 그래프** (`PROJECT_BRIEF.md` 8장)
-> **상태** 진행 중 · 마지막 갱신 2026-09-17
+> **상태** 진행 중 · 마지막 갱신 2026-09-19
 
 ---
 
@@ -162,7 +162,7 @@ docker compose -f docker-compose.yml -f docker-compose.scale.yml up -d --scale a
 
 ---
 
-#### [ ] 4단계 — 측정 <sub>약 2.5시간, 무인</sub>
+#### [x] 4단계 — 측정 ✅ <sub>약 2.5시간, 무인</sub>
 
 5장 참조. spike × W0~W4 × 3회 = 15회.
 
@@ -182,7 +182,7 @@ docker compose -f docker-compose.yml -f docker-compose.scale.yml up -d --scale a
 
 ### 2주차에서 넘어온 숙제 — soak 후속 (단일 인스턴스)
 
-#### [~] 6단계 — DB 계측 + W3 soak 3회 채우기 <sub>구현 2시간 ✅ + 측정 2.2시간 무인</sub>
+#### [~] 6단계 — DB 계측 + W3 soak 3회 채우기 <sub>구현 ✅ + 측정 ✅ + 결론 대기</sub>
 
 | 항목 | 내용 |
 |---|---|
@@ -333,6 +333,8 @@ C0~C4 × 3회 = 15회.
 | 2026-09-16 | — | 3주차 계획 수립. W0 붕괴의 기전(더티 체킹 절대값 UPDATE 의 갱신 손실)과 규모(수천~수만 건, `counter_drift` 큰 음수)를 검증 대상으로 적음. 인스턴스 수 3 고정 추천. W4 워커 다중 실행이 `trim` 으로 유실을 만든다는 점을 확인해 토글 필요성을 기록 |
 | 2026-09-17 | 0 | 완료. 브리프 **D-10**(인스턴스 3 고정) 신설, 13장 항목 닫음, `results/week3-experiment-a-stage2/conditions.md` 생성, `results/README.md` 폴더 표에 `week3-soak-followup/` 추가. `--scale app=3` 표기 정리는 구성이 확정되는 1단계로 옮김 |
 | 2026-09-17 | 1 | 완료 (sonnet sub-agent 구현, 검토 후 반영). `docker-compose.scale.yml`(app ×2 포트 해제·풀 10·워커 off, `app-worker` 이미지 재사용·워커 on, nginx 1.27.5), `infra/nginx/nginx.conf`, `coupon.w4.worker-enabled`(`@ConditionalOnBooleanProperty`, Boot 3.5), Prometheus dns_sd 에 `app-worker`, `--scale app=3` 표기 5곳 정정. 검증: nginx 경유 30건 → instance 3종 **10/10/10**, Prometheus 타겟 3 up, W4 20건 → DB 20행 · `reflected_total` 은 app-worker 에서만 20, 오버레이 없이 `up -d` 이전과 동일, 15 tests 0 failures. **계획에 없던 수정 1건**: nginx 기본 `Host $proxy_host` 가 upstream 이름 `coupon_app`(밑줄)을 그대로 보내 Tomcat 이 전부 400 → `proxy_set_header Host $host` 추가. 메모리 실측 idle 기준 JVM 3대 2,282MiB, 전체 2,624MiB (한도 11.5GiB) |
+| 2026-09-19 | 4 · 6 (측정) | **19회 완주** (stage2 15 + soak 후속 4, 실패 0, 재부팅 없음, commit 열 전부 `e654c38`, 분배 15회 전부 33% 안팎). **W0 는 3/3 깨졌다** — `over_issue` 50,000 / 50,000 / 50,000, `counter_drift` −99,126 / −99,386 / −99,332, `duplicate_users` 0, 150,000건 전부 발급(SOLD_OUT 0건). W1·W2·W3·W4 는 전부 0/0/0 — **NFR-07 은 W0 만 탈락**. 1장의 예상(갱신 손실 기전·규모·SOLD_OUT 0건)이 3/3 적중. soak 후속 4회도 정합성 0/0/0. **재고를 다 팔지 못한 전략**: W2 29~30k, W3 85~89k (락 대기 3초 타임아웃 503 이 6만 건대) — 인스턴스당 풀 10 으로 줄면서 1대보다 실패 모드가 세졌다. W4 는 3대에서도 100,000 정확히 소진·1.9분. **`app_5xx` 열 버그 확인**: 15행 전부 0. 실제값은 앱 로그 요약에 있으나(W1 23~39k, W2 72~78k) **W3 의 503 `LOCK_TIMEOUT` 은 의도된 응답이라 로그 요약에도 안 잡힌다**(0~2) — 정확한 값은 Prometheus 에서 뽑는다 |
+| 2026-09-18 22:29 | 4 · 6 (측정) | **밤 배치 시작** (`e654c38`, 분리 프로세스 pid 34412): `run-week3.ps1 -Phase stage2` 15회 → `-Phase soak-followup` 4회. 종료 예상 새벽 3~4시. **진행 중 확인한 것**: ① W0 spike 1회차 발급 153,519 (스모크와 같은 규모의 붕괴), 분배 51,172/51,176/51,171 ② **W1 spike 1회차 5xx 39,019건** (26%) — 전부 앱의 `CannotCreateTransactionException`(HikariCP 3초 타임아웃), 1대에서는 5~23건. 인스턴스당 풀 10 뒤에 스레드 600 이 줄을 서서 증폭. 정합성은 0/0/0 으로 유지, 도달 건수 일치(113,273 + 39,019 = 152,292). 브리프 5.1 의 예상 실패 모드가 3대에서 증폭된 것 — summary 재료 ③ **러너 버그**: `runs.tsv` 의 `app_5xx` 열이 0 으로 찍힘 (앱 로그 요약에는 39,019). `http_server_requests_seconds_count` 의 status 5xx 정규식이 안 맞는 듯. 판정과 무관, **배치 끝난 뒤 고친다** (측정 중 코드 수정 금지) |
 | 2026-09-18 | 6 (구현) | 완료 (sonnet sub-agent, 검토 후 반영). 계획의 커스텀 쿼리는 **불필요** — exporter 내장 컬렉터 3개(`stat_bgwriter` · `stat_database` · `stat_user_tables`)가 기본 활성이라 11개 메트릭이 이미 나왔다. `queries.yml` · compose 무변경, 대시보드에 패널 4개만 추가. `results/week3-soak-followup/conditions.md` 생성. 2분 축소 soak 로 값 변화 확인(커밋 카운터 증가, live_tup ≈ 발급 수, 체크포인트 136→138, autovacuum 176→178). **바로잡은 것 2개**: postgres job 스크레이프 간격은 15초가 아니라 전역 5초 상속(내 브리프가 틀렸음) / `app/` 은 `fff48c3` 과 diff 가 있다 — 1단계의 워커 토글 2파일. conditions.md 에 둘 다 사실대로 적음. 측정 4회는 밤 배치로 |
 | 2026-09-18 | 3 | 완료 (직접, 분리 프로세스, 6.2분). **W0 는 3대에서 깨진다 — 예상보다 세게.** spike-coupon: `actual_rows` **150,000** / `over_issue` **50,000** / `counter_drift` **−99,461** / `duplicate_users` 0. 분배 51,254 / 51,255 / 51,252, 5xx 0, 미도달 0, k6 발급 = DB 행 = 153,761. **SOLD_OUT 응답 0건** — 카운터가 100,000 에 닿기 전에 요청 150,000 이 다 소진됐다. 손실률 L 로 환산하면 1 − 50,539/150,000 = **66%**, 1장의 "L > 1/3 이면 전부 발급" 구간이다. 기전(더티 체킹 절대값 UPDATE → 갱신 손실)은 세 열이 모두 지지한다. sustained-coupon(워밍업)도 drift −2,429 로 같은 기전. 결과 폐기 (`week3-smoke/` 삭제), 4단계는 `353b43a` 로 |
 | 2026-09-18 | 2 | 완료 (sonnet sub-agent 2회, 검토 후 반영). `run-experiment.ps1` 에 `-Instances 1|3` (풀 = 30 ÷ N, `-PoolSize` 제거), 안전장치 2개(3대인데 `-Week` 기본값 → throw, 3대 + chaos → throw), 3대 경로(오버레이 집합, `docker inspect` 헬스 대기, 컨테이너별 전략 확인, nginx 재기동 후 200 확인, k6 → `nginx:8080`), `runs.tsv` 15열(`instances` · `per_instance` · `app_5xx`, 25% 미만 경고). `run-week3.ps1` (`-Phase stage2 | soak-followup`, finally 에서 오버레이 해체). 축소 실행: 1대 W0 `8156` / 3대 W0 **8616/8619/8614** / 3대 W4 반영 1.1초 · drift 0 · `k6_issued − db_rows` 0. **실측으로 잡은 버그 3개**: ① nginx 재기동 시 `--scale app=2` 를 안 주면 compose 가 scale 을 1 로 되돌려 app-2 를 지움 ② PowerShell `if` 표현식 대입이 원소 1개 배열을 스칼라로 접어 스플랫이 문자 단위로 쪼개짐 ③ 배치 준비에서 기본 파일만으로 `up -d` 하면 재개 시 nginx 가 쥔 8080 과 충돌 → 오버레이 집합 `up -d --scale app=2` 한 번으로 교체. 첫 sub-agent 는 검증 (e) 에서 멈춰(stall) 내가 드라이스타트를 직접 돌리다 ③ 을 발견, 두 번째 sub-agent 가 수정·재개/초기 두 상태에서 재검증·정리 |
