@@ -6,6 +6,7 @@ import com.experiment.coupon.api.dto.IssueResponse;
 import com.experiment.coupon.domain.IssueResult;
 import com.experiment.coupon.service.CouponIssueService;
 import com.experiment.coupon.service.CouponQueryService;
+import com.experiment.coupon.service.CouponReadService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
@@ -24,13 +25,16 @@ public class CouponController {
 
     private final CouponIssueService issueService;
     private final CouponQueryService queryService;
+    private final CouponReadService readService;
     private final String instanceId;
 
     public CouponController(CouponIssueService issueService,
                             CouponQueryService queryService,
+                            CouponReadService readService,
                             @Value("${coupon.instance-id}") String instanceId) {
         this.issueService = issueService;
         this.queryService = queryService;
+        this.readService = readService;
         this.instanceId = instanceId;
     }
 
@@ -45,15 +49,15 @@ public class CouponController {
                         issueService.strategyType(), instanceId));
     }
 
-    // 쿠폰 상세 (FR-03) — 실험 B 대상
+    // 쿠폰 상세 (FR-03) — 실험 B 대상, C0~C4 캐시 전략을 거친다
     @GetMapping("/{couponId}")
     public ResponseEntity<CouponResponse> findOne(@PathVariable long couponId) {
-        return queryService.findById(couponId)
+        return readService.findById(couponId)
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
-    // 쿠폰 목록 (FR-04) — 실험 B 대상
+    // 쿠폰 목록 (FR-04) — 실험 B 측정 대상 아님 (D-12), CouponQueryService 그대로 유지
     @GetMapping
     public List<CouponResponse> findAll() {
         return queryService.findAll();

@@ -13,6 +13,7 @@ public class MetricsConfig {
      * 공통 태그
      *
      * strategy — 비교군 구분 (실험 A)
+     * cache — 비교군 구분 (실험 B), 러너가 적용된 전략을 확인하는 용도로 strategy 와 같은 역할
      * app_instance — 2단계에서 어느 인스턴스가 처리했는지 구분 (PROJECT_BRIEF 7장)
      *
      * 라벨명이 instance 이면 Prometheus 가 스크레이프 대상 주소로 덮어쓰고
@@ -21,9 +22,11 @@ public class MetricsConfig {
     @Bean
     MeterRegistryCustomizer<MeterRegistry> commonTags(
             @Value("${coupon.strategy}") String strategy,
+            @Value("${coupon.cache}") String cache,
             @Value("${coupon.instance-id}") String instanceId) {
         return registry -> registry.config().commonTags(
                 "strategy", strategy,
+                "cache", cache,
                 "app_instance", instanceId);
     }
 }

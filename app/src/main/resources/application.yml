@@ -47,6 +47,10 @@ spring:
 coupon:
   # 활성 전략 (W0 ~ W4) — 프로파일이 아닌 설정값으로 교체 (PROJECT_BRIEF 5.4)
   strategy: ${COUPON_STRATEGY:W0}
+  # 활성 읽기 전략 (C0 ~ C4) — 실험 B. 발급 전략과 같은 방식으로 설정값 교체
+  cache: ${COUPON_CACHE:C0}
+  # 캐시 TTL — 60초는 5분 부하에서 만료를 4~5회 보기 위한 실험값 (D-12)
+  cache-ttl-seconds: ${COUPON_CACHE_TTL:60}
   # 2단계 인스턴스 식별자
   instance-id: ${INSTANCE_ID:${HOSTNAME:app-local}}
   w4:
