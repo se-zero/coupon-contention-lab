@@ -25,6 +25,7 @@ Docker Desktop 의 Windows 포트 프록시를 거치는데, 1,000 VU 가 동시
 | `soak.js` | NFR-06 (시간축 열화) | `sustained-coupon` | 1단계 |
 
 | `chaos.js` | NFR-05 (Redis 장애) | `spike-coupon` | 1단계, W3/W4 만 |
+| `stampede.js` | 캐시 스탬피드 재현 (판정 없음, 관측용) | `cache-coupon-01`~`20` (재고 100,000, id 101~120) | 실험 B, 단일 인스턴스 |
 
 `chaos.js` 의 부하는 spike 와 같다. Redis 를 죽이고 살리는 것은 `run-experiment.ps1` 이 한다 (확정값 D-07).
 

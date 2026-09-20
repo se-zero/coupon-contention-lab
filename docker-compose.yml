@@ -64,6 +64,10 @@ services:
       DB_POOL_SIZE: ${DB_POOL_SIZE:-30}
       # 활성 전략 (W0 ~ W4)
       COUPON_STRATEGY: ${COUPON_STRATEGY:-W0}
+      # 활성 읽기 전략 (C0 ~ C4) — 실험 B
+      COUPON_CACHE: ${COUPON_CACHE:-C0}
+      # 캐시 TTL — 실험값 60초 (D-12)
+      COUPON_CACHE_TTL: ${COUPON_CACHE_TTL:-60}
       REDIS_HOST: redis
     ports:
       - "8080:8080"
