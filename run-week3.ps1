@@ -1,31 +1,38 @@
-# 3주차 전반 측정 배치 러너 — run-experiment.ps1 을 반복 호출한다 (plan/week3.md 5장)
+# 3주차 전반 측정 배치 러너 — run-experiment.ps1 · run-cache.ps1 을 반복 호출한다 (plan/week3.md 5장)
 #
 # stage2: spike × W0~W4 × 회차 1·2·3 = 15회, 3 인스턴스 (D-10). 회차 안에서 전략을 돌아가며 실행한다.
 #         배치가 끝나면 오버레이(nginx, app-worker)를 내리고 단일 인스턴스로 되돌린다 - 안 내리면
 #         다음 단일 인스턴스 측정에 app-worker 의 풀 10 이 섞여 커넥션 예산 30 이 깨진다 (D-01). 실패해도(finally) 해체한다.
 # soak-followup: W3 soak 2·3회차 + W0·W1 soak 4회차, 단일 인스턴스 (2주차 폴더의 회차 번호를 이어받는다 - D-05).
 #         6단계(DB 계측)가 붙은 뒤에 돌린다. 지금은 목록과 배관만 만든다.
+# experiment-b: C0~C4 × 회차 1·2·3 = 15회, 단일 인스턴스 (10단계). 회차 안에서 전략을 돌아가며 실행한다.
+#         전체 스택(Prometheus 포함)을 오버레이 없이 올린다 - 해체할 오버레이가 없어 finally 에서 할 일도 없다.
 #
-# 재개: results\<Week>\runs.tsv 에 이미 있는 (전략, 시나리오, 회차)는 건너뛴다.
+# 재개: results\<Week>\runs.tsv 에 이미 있는 실행은 건너뛴다 (stage2·soak-followup 은 전략·시나리오·회차,
+#       experiment-b 는 캐시·회차 열 기준 - run-cache.ps1 의 runs.tsv 열 이름이 다르다).
 # 실패한 실행은 기록되지 않으므로 다시 돌리면 그것만 다시 한다.
 #
 # 사용법:
 #   .\run-week3.ps1 -Phase stage2          # 15회, 3 인스턴스, 약 2.5시간. 무인
 #   .\run-week3.ps1 -Phase soak-followup   # 4회, 단일 인스턴스, 약 2.2시간. 무인
+#   .\run-week3.ps1 -Phase experiment-b    # 15회, 단일 인스턴스, 회당 약 6분 × 15 ≈ 1.5~2시간. 무인
 
 param(
-    [Parameter(Mandatory)][ValidateSet('stage2', 'soak-followup')]
+    [Parameter(Mandatory)][ValidateSet('stage2', 'soak-followup', 'experiment-b')]
     [string]$Phase
 )
 
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
 $strategies = @('W0', 'W1', 'W2', 'W3', 'W4')
+$caches = @('C0', 'C1', 'C2', 'C3', 'C4')
 
 if ($Phase -eq 'stage2') {
     $Week = 'week3-experiment-a-stage2'
-} else {
+} elseif ($Phase -eq 'soak-followup') {
     $Week = 'week3-soak-followup'
+} else {
+    $Week = 'week3-experiment-b'
 }
 
 # ── 실행 목록 ──────────────────────────────────────────────────────────
@@ -39,12 +46,19 @@ function Add-Runs([string]$scenario, [string[]]$targets, [int[]]$runs) {
 }
 if ($Phase -eq 'stage2') {
     Add-Runs 'spike' $strategies @(1, 2, 3)
-} else {
+} elseif ($Phase -eq 'soak-followup') {
     # 2주차 폴더의 회차 번호를 이어받는다 - W0·W1 은 2주차에 3회를 마쳤다 (확정값 D-05)
     $plan.Add([pscustomobject]@{ Strategy = 'W3'; Scenario = 'soak'; Run = 2 })
     $plan.Add([pscustomobject]@{ Strategy = 'W3'; Scenario = 'soak'; Run = 3 })
     $plan.Add([pscustomobject]@{ Strategy = 'W0'; Scenario = 'soak'; Run = 4 })
     $plan.Add([pscustomobject]@{ Strategy = 'W1'; Scenario = 'soak'; Run = 4 })
+} else {
+    # C0~C4 × 회차 1·2·3 = 15회 - 회차 안에서 캐시 전략을 돌아가며 실행한다 (시간대 편향 방지, plan/week3.md 5장)
+    foreach ($r in @(1, 2, 3)) {
+        foreach ($c in $caches) {
+            $plan.Add([pscustomobject]@{ Cache = $c; Run = $r })
+        }
+    }
 }
 
 # ── 재개 — 끝난 것은 건너뛴다 ──────────────────────────────────────────
@@ -52,11 +66,22 @@ $weekDir = Join-Path $root "results\$Week"
 $indexFile = Join-Path $weekDir 'runs.tsv'
 $done = @{}
 if (Test-Path $indexFile) {
-    Import-Csv -Path $indexFile -Delimiter "`t" | ForEach-Object {
-        $done["$($_.strategy)/$($_.scenario)/$($_.run)"] = $true
+    if ($Phase -eq 'experiment-b') {
+        # run-cache.ps1 의 runs.tsv 는 열 이름이 cache·run 이다 (run-experiment.ps1 과 다르다)
+        Import-Csv -Path $indexFile -Delimiter "`t" | ForEach-Object {
+            $done["$($_.cache)/$($_.run)"] = $true
+        }
+    } else {
+        Import-Csv -Path $indexFile -Delimiter "`t" | ForEach-Object {
+            $done["$($_.strategy)/$($_.scenario)/$($_.run)"] = $true
+        }
     }
 }
-$pending = @($plan | Where-Object { -not $done["$($_.Strategy)/$($_.Scenario)/$($_.Run)"] })
+if ($Phase -eq 'experiment-b') {
+    $pending = @($plan | Where-Object { -not $done["$($_.Cache)/$($_.Run)"] })
+} else {
+    $pending = @($plan | Where-Object { -not $done["$($_.Strategy)/$($_.Scenario)/$($_.Run)"] })
+}
 
 Write-Host "=== 3주차 배치 [$Phase] — 계획 $($plan.Count)회, 완료 $($plan.Count - $pending.Count)회, 남은 $($pending.Count)회 ===" -ForegroundColor Cyan
 if ($pending.Count -eq 0) { Write-Host '할 일이 없다'; exit 0 }
@@ -86,11 +111,17 @@ try {
     $batchStart = Get-Date
     $ok = 0; $failed = @()
     foreach ($p in $pending) {
-        $key = "$($p.Strategy)/$($p.Scenario)/$($p.Run)"
+        if ($Phase -eq 'experiment-b') {
+            $key = "$($p.Cache)/$($p.Run)"
+        } else {
+            $key = "$($p.Strategy)/$($p.Scenario)/$($p.Run)"
+        }
         Write-Host "`n>>> [$($ok + $failed.Count + 1)/$($pending.Count)] $key  (경과 $([math]::Round(((Get-Date) - $batchStart).TotalMinutes))분)" -ForegroundColor Magenta
         try {
             if ($Phase -eq 'stage2') {
                 & "$root\run-experiment.ps1" -Strategy $p.Strategy -Scenario $p.Scenario -Run $p.Run -Week $Week -Instances 3
+            } elseif ($Phase -eq 'experiment-b') {
+                & "$root\run-cache.ps1" -Cache $p.Cache -Run $p.Run -Week $Week
             } else {
                 & "$root\run-experiment.ps1" -Strategy $p.Strategy -Scenario $p.Scenario -Run $p.Run -Week $Week
             }

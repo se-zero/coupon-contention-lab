@@ -118,7 +118,7 @@ Write-Host "=== [$tag] 시작 ===" -ForegroundColor Cyan
 Write-Host "  캐시=$Cache  회차=$Run  주차=$Week"
 
 # ── 1. 전략 적용 후 스택 기동 ──────────────────────────────────────────
-Write-Host '[1/7] 캐시 전략 적용 + 스택 기동' -ForegroundColor Cyan
+Write-Host '[1/8] 캐시 전략 적용 + 스택 기동' -ForegroundColor Cyan
 $env:COUPON_CACHE = $Cache
 $env:DB_POOL_SIZE = 30
 # 쓰기 전략은 W0 고정 — 이 부하에는 발급 요청이 없어 호출되지 않는다 (D-12)
@@ -126,7 +126,7 @@ $env:COUPON_STRATEGY = 'W0'
 Invoke-Native { docker compose @composeArgs up -d --force-recreate app } | Out-Null
 
 # ── 2. 기동 대기 + 적용 확인 ─────────────────────────────────────────────
-Write-Host '[2/7] 헬스체크 대기' -ForegroundColor Cyan
+Write-Host '[2/8] 헬스체크 대기' -ForegroundColor Cyan
 $deadline = (Get-Date).AddMinutes(3)
 $ready = $false
 while ((Get-Date) -lt $deadline) {
@@ -148,7 +148,7 @@ if ($metrics -match 'cache="([^"]+)"') {
 }
 
 # ── 3. DB / Redis 초기화 + 캐시 시드 ─────────────────────────────────────
-Write-Host '[3/7] DB / Redis 초기화' -ForegroundColor Cyan
+Write-Host '[3/8] DB / Redis 초기화' -ForegroundColor Cyan
 Invoke-Native { & "$root\seed\reset.ps1" } | Out-Null
 
 Write-Host '      실험 B 시드 적용 (id 101~120)' -ForegroundColor Cyan
@@ -157,9 +157,19 @@ Invoke-Native {
         docker compose @composeArgs exec -T postgres psql -U coupon -d coupon -v ON_ERROR_STOP=1
 } | Out-Null
 
-# ── 4. 부하 실행 ───────────────────────────────────────────────────────
+# ── 4. Prometheus 확인 ────────────────────────────────────────────────
+# 러너는 app 만 띄운다 - Prometheus 가 없어도 k6 는 그대로 끝까지 돌아 peak_db_load 와
+# series/ 가 조용히 빈 채 7분이 통째로 무의미해진다 (9단계 검증에서 실측)
+Write-Host '[4/8] Prometheus 확인' -ForegroundColor Cyan
+try {
+    Invoke-WebRequest -Uri 'http://localhost:9090/-/ready' -UseBasicParsing -TimeoutSec 5 | Out-Null
+} catch {
+    throw 'Prometheus 가 없다 (localhost:9090). 이 실험은 1초 시계열이 핵심 지표라 Prometheus 없이는 무의미하다. docker compose up -d 로 전체 스택을 먼저 올려라'
+}
+
+# ── 5. 부하 실행 ───────────────────────────────────────────────────────
 # k6 는 컨테이너로 돈다 (확정값 D-09) - 호스트에서 돌리면 Windows 포트 프록시가 결과를 오염시킨다
-Write-Host '[4/7] k6 실행 (컨테이너)' -ForegroundColor Cyan
+Write-Host '[5/8] k6 실행 (컨테이너)' -ForegroundColor Cyan
 $k6Image = 'grafana/k6:1.6.1'
 $k6Network = 'coupon-experiment_default'
 $k6Args = @('run', '--rm', '--network', $k6Network,
@@ -197,11 +207,11 @@ $thresholds = switch ($k6Exit) {
     default { throw "k6 실행 실패 (exit=$k6Exit). 로그 확인: $k6Log" }
 }
 
-# ── 5. 피크 db_load 산출 + 미스 타이머 시계열 ─────────────────────────────
+# ── 6. 피크 db_load 산출 + 미스 타이머 시계열 ─────────────────────────────
 # db_load 가 이 실험의 핵심 지표다. load/wait 타이머도 같은 1초 해상도로 같이 받는다 -
 # 정식 실행의 미스에는 워밍업(jit/warm, 콜드 스타트)과 파동(측정 구간)이 섞여 있어
 # runs.tsv 의 전 구간 평균만으로는 파동 중 미스 창의 실측값을 알 수 없다 (11단계가 구간을 잘라 쓴다)
-Write-Host '[5/7] 피크 db_load 산출 + 타이머 시계열 (Prometheus)' -ForegroundColor Cyan
+Write-Host '[6/8] 피크 db_load 산출 + 타이머 시계열 (Prometheus)' -ForegroundColor Cyan
 $peakDbLoad = ''
 try {
     $startUnix = [DateTimeOffset]::new($startedAt.ToUniversalTime()).ToUnixTimeSeconds()
@@ -232,8 +242,8 @@ try {
     Write-Host "      경고: Prometheus 조회 실패 - peak_db_load 를 비워 기록한다 ($_)" -ForegroundColor Yellow
 }
 
-# ── 6. 앱 메트릭 집계 ─────────────────────────────────────────────────
-Write-Host '[6/7] 앱 메트릭 집계' -ForegroundColor Cyan
+# ── 7. 앱 메트릭 집계 ─────────────────────────────────────────────────
+Write-Host '[7/8] 앱 메트릭 집계' -ForegroundColor Cyan
 $metricsAfter = (Invoke-WebRequest -Uri 'http://localhost:8081/actuator/prometheus' -UseBasicParsing -TimeoutSec 10).Content
 $hit = Get-MetricSum -Text $metricsAfter -Prefix 'coupon_cache_total{' -Contains 'result="hit'
 $miss = Get-MetricSum -Text $metricsAfter -Prefix 'coupon_cache_total{' -Contains 'result="miss'
@@ -267,8 +277,8 @@ $measureRead = $summary.metrics.'http_req_duration{phase:measure,name:read}'
 if ($measureRead) { $k6P99Ms = [math]::Round($measureRead.'p(99)', 1) }
 Write-Host "      k6_reqs=$k6Reqs k6_p99_ms=$k6P99Ms read_error=$readError"
 
-# ── 7. 실행 이력 기록 ─────────────────────────────────────────────────
-Write-Host '[7/7] 결과 기록' -ForegroundColor Cyan
+# ── 8. 실행 이력 기록 ─────────────────────────────────────────────────
+Write-Host '[8/8] 결과 기록' -ForegroundColor Cyan
 $indexFile = Join-Path $weekDir 'runs.tsv'
 if (-not (Test-Path $indexFile)) {
     "timestamp`tcache`trun`telapsed_s`tthresholds`tk6_reqs`tk6_p99_ms`tread_error`thit`tmiss`tdb_load`tpeak_db_load`thit_ratio`tload_mean_ms`tload_count`twait_mean_ms`twait_count`twait_timeout`tcommit" |
