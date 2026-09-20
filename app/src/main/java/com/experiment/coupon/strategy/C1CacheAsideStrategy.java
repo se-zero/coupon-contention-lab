@@ -32,11 +32,11 @@ public class C1CacheAsideStrategy implements CouponReadStrategy {
 
     private static final String KEY_PREFIX = "coupon:detail:";
 
-    private final RedissonClient redisson;
+    protected final RedissonClient redisson;
     private final CouponRepository couponRepository;
-    private final ObjectMapper objectMapper;
-    private final CacheMetrics metrics;
-    private final long ttlSeconds;
+    protected final ObjectMapper objectMapper;
+    protected final CacheMetrics metrics;
+    protected final long ttlSeconds;
 
     public C1CacheAsideStrategy(RedissonClient redisson,
                                 CouponRepository couponRepository,
@@ -60,16 +60,32 @@ public class C1CacheAsideStrategy implements CouponReadStrategy {
         }
 
         metrics.recordMiss();
-        long start = System.nanoTime();
-        Optional<CouponResponse> result = couponRepository.findById(couponId).map(CouponResponse::from);
-        metrics.recordDbLoad(Duration.ofNanos(System.nanoTime() - start));
+        Optional<CouponResponse> result = loadFromDb(couponId);
 
         // 없는 쿠폰은 캐시하지 않는다 — 캐시 관통 방어는 이 실험 범위 밖이고 부하는 실재하는 키만 조회한다 (D-12)
-        result.ifPresent(response -> bucket.set(serialize(response), Duration.ofSeconds(ttlSeconds)));
+        result.ifPresent(response -> bucket.set(serialize(response), ttl()));
         return result;
     }
 
-    private String serialize(CouponResponse response) {
+    // DB 조회 + 소요 시간 기록 (C3 의 로더·상한 도달 경로가 그대로 재사용)
+    protected Optional<CouponResponse> loadFromDb(long couponId) {
+        long start = System.nanoTime();
+        Optional<CouponResponse> result = queryDb(couponId);
+        metrics.recordDbLoad(Duration.ofNanos(System.nanoTime() - start));
+        return result;
+    }
+
+    // 순수 DB 조회 (시간 측정 없음) — C4 가 delta 를 직접 재야 할 때 씀
+    protected Optional<CouponResponse> queryDb(long couponId) {
+        return couponRepository.findById(couponId).map(CouponResponse::from);
+    }
+
+    // 캐시에 넣을 TTL — C2 가 override 해 지터를 더한다
+    protected Duration ttl() {
+        return Duration.ofSeconds(ttlSeconds);
+    }
+
+    protected String serialize(CouponResponse response) {
         try {
             return objectMapper.writeValueAsString(response);
         } catch (JsonProcessingException e) {
@@ -77,7 +93,7 @@ public class C1CacheAsideStrategy implements CouponReadStrategy {
         }
     }
 
-    private CouponResponse deserialize(String json) {
+    protected CouponResponse deserialize(String json) {
         try {
             return objectMapper.readValue(json, CouponResponse.class);
         } catch (JsonProcessingException e) {
@@ -85,7 +101,7 @@ public class C1CacheAsideStrategy implements CouponReadStrategy {
         }
     }
 
-    private static String key(long couponId) {
+    protected static String key(long couponId) {
         return KEY_PREFIX + couponId;
     }
 

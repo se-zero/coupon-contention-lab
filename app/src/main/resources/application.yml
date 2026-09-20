@@ -51,6 +51,12 @@ coupon:
   cache: ${COUPON_CACHE:C0}
   # 캐시 TTL — 60초는 5분 부하에서 만료를 4~5회 보기 위한 실험값 (D-12)
   cache-ttl-seconds: ${COUPON_CACHE_TTL:60}
+  # C2 지터 폭 — TTL ± J 초 (D-14)
+  cache-jitter-seconds: ${COUPON_CACHE_JITTER:10}
+  # C3 락 대기 상한 — 넘기면 자기가 DB 를 읽는다 (D-13)
+  cache-mutex-wait-ms: ${COUPON_CACHE_MUTEX_WAIT_MS:2000}
+  # C4 XFetch β — "얼마나 일찍" 의 배수 (D-14)
+  cache-xfetch-beta: ${COUPON_CACHE_XFETCH_BETA:1.0}
   # 2단계 인스턴스 식별자
   instance-id: ${INSTANCE_ID:${HOSTNAME:app-local}}
   w4:
