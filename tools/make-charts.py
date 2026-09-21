@@ -7,8 +7,12 @@ Prometheus 보존 기간(30일)이 지나도 캐시가 있으면 그래프를 �
 사용법:
     python tools/make-charts.py                 # 캐시가 있으면 캐시로 그린다
     python tools/make-charts.py --refresh       # Prometheus 를 다시 읽는다 (스택이 떠 있어야 한다)
+    python tools/make-charts.py --week week3-experiment-b   # 실험 B (캐시 C0~C4)
 
-색은 dataviz 기준 팔레트의 categorical 슬롯 1~5 를 순서대로 쓴다 (W0~W4 고정).
+--week week3-experiment-b 는 원본이 results/week3-experiment-b/series/*.tsv 파일이라
+Prometheus 를 쓰지 않는다. 파일이 원본이라 매번 다시 읽어도 싸므로 --refresh 는 무시한다.
+
+색은 dataviz 기준 팔레트의 categorical 슬롯 1~5 를 순서대로 쓴다 (W0~W4, C0~C4 고정).
 라이트/다크 두 벌을 만들고, 문서에서 <picture> 로 테마에 맞춰 고른다.
 캡션에 유니코드 마이너스(U+2212)를 쓰지 않는다 — Malgun Gothic 에 글리프가 없다.
 """
@@ -43,6 +47,15 @@ THEME = {
     'dark': dict(surface='#1a1a19', ink='#ffffff', ink2='#c3c2b7', grid='#383835',
                  series=['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181']),
 }
+
+# stampede.js 의 파동 정의와 같은 값을 본다 — warm 35초 + TTL 60초 배수
+CACHE_STRATEGIES = ['C0', 'C1', 'C2', 'C3', 'C4']
+CACHE_LABELS = {
+    'C0': 'C0 캐시 없음', 'C1': 'C1 고정 TTL', 'C2': 'C2 지터',
+    'C3': 'C3 뮤텍스', 'C4': 'C4 XFetch',
+}
+EXPIRY_WAVES_SEC = [95, 155, 215, 275, 335]
+WARMUP_END_SEC = 45
 
 
 # ── Prometheus ────────────────────────────────────────────────────────
@@ -115,6 +128,26 @@ def extract(week):
     for r in [x for x in runs if x['scenario'] == 'chaos']:
         data['chaos'].setdefault(r['strategy'], {})[r['run']] = \
             int(r['k6_issued']) - int(r['db_rows'])
+    return data
+
+
+def load_series(week, cache, run):
+    path = os.path.join(ROOT, 'results', week, 'series', f'{cache}-run{run}.tsv')
+    with open(path, encoding='utf-8-sig') as f:
+        rows = list(csv.DictReader(f, delimiter='\t'))
+    return {'t': [float(r['t_offset_s']) for r in rows],
+            'db_load_per_s': [float(r['db_load_per_s']) for r in rows]}
+
+
+def extract_b(week):
+    """실험 B — 원본이 series/*.tsv 파일이라 Prometheus 를 보지 않는다."""
+    runs = load_runs(week)
+    data = {'week': week, 'series': {}, 'peak': {}}
+    for c in CACHE_STRATEGIES:
+        data['series'][c] = {run: load_series(week, c, run) for run in ('1', '2', '3')}
+        peaks = [float(r['peak_db_load']) for r in runs if r['cache'] == c]
+        data['peak'][c] = {'mean': st.mean(peaks),
+                            'stdev': st.stdev(peaks) if len(peaks) > 1 else 0.0}
     return data
 
 
@@ -350,6 +383,85 @@ def chart_chaos(plt, data, theme, out):
     plt.close(fig)
 
 
+def chart_stampede_timeline(plt, data, theme, out):
+    fig, axes = plt.subplots(1, 5, figsize=(18, 4.6))
+    fig.patch.set_facecolor(theme['surface'])
+    fig.subplots_adjust(top=0.8, wspace=0.15)
+
+    shared = [v for c in CACHE_STRATEGIES[1:] for run in ('1', '2', '3')
+              for v in data['series'][c][run]['db_load_per_s']]
+    shared_max = max(shared) * 1.1
+    c0_max = max(v for run in ('1', '2', '3')
+                 for v in data['series']['C0'][run]['db_load_per_s']) * 1.1
+
+    for i, c in enumerate(CACHE_STRATEGIES):
+        ax = axes[i]
+        style_axes(ax, theme)
+        ax.axvspan(0, WARMUP_END_SEC, color=theme['grid'], alpha=0.6, zorder=0)
+        if c == 'C0':
+            ax.annotate('워밍업', (WARMUP_END_SEC / 2, 0.94), xycoords=('data', 'axes fraction'),
+                        ha='center', va='top', fontsize=7.5, color=theme['ink2'])
+        for w in EXPIRY_WAVES_SEC:
+            ax.axvline(w, color=theme['ink2'], linewidth=0.9, alpha=0.4, zorder=1)
+        for run in ('1', '2', '3'):
+            s = data['series'][c][run]
+            ax.plot(s['t'], s['db_load_per_s'], color=theme['series'][i],
+                    linewidth=1.0, alpha=0.6, zorder=3)
+
+        ax.set_xlim(0, 345)
+        ax.set_xlabel('측정 시각 (초)')
+        if c == 'C0':
+            title = CACHE_LABELS[c] + '  (y 축 다름)'
+        elif c == 'C1':
+            title = CACHE_LABELS[c] + '  (C1~C4 y 축 공유)'
+        else:
+            title = CACHE_LABELS[c]
+        ax.set_title(title, fontsize=11.5, pad=8, loc='left')
+        if c == 'C0':
+            ax.set_ylim(0, c0_max)
+            ax.set_ylabel('초당 DB 조회')
+        else:
+            ax.set_ylim(0, shared_max)
+            if c != 'C1':
+                ax.tick_params(labelleft=False)
+
+    fig.suptitle('실험 B — TTL 만료 파동에서 다섯 캐시 전략은 어떻게 갈리는가  (stampede, 3회 겹침)',
+                 fontsize=13.5, color=theme['ink'], x=0.008, ha='left', y=1.0)
+    caption(fig, theme, '200 VU · 5분 · 키 20개 · TTL 60초 · 3회 겹침. C0 는 y 축이 다르다.')
+    save(fig, out, theme)
+    plt.close(fig)
+
+
+def chart_stampede_peak(plt, data, theme, out):
+    fig, ax = plt.subplots(figsize=(8, 4.6))
+    fig.patch.set_facecolor(theme['surface'])
+    fig.subplots_adjust(top=0.82)
+    style_axes(ax, theme)
+
+    strategies = CACHE_STRATEGIES[1:]  # C1~C4 — C0 는 축을 깨뜨려 뺀다
+    means = [data['peak'][c]['mean'] for c in strategies]
+    stdevs = [data['peak'][c]['stdev'] for c in strategies]
+    colors = [theme['series'][CACHE_STRATEGIES.index(c)] for c in strategies]
+    x = list(range(len(strategies)))
+
+    ax.bar(x, means, yerr=stdevs, capsize=4, color=colors,
+           error_kw=dict(ecolor=theme['ink2'], linewidth=1.2), zorder=3)
+    for xi, m, sd in zip(x, means, stdevs):
+        ax.annotate(f'{m:.0f} ± {sd:.0f}', (xi, m + sd), xytext=(0, 6),
+                    textcoords='offset points', ha='center', color=theme['ink'],
+                    fontsize=9.5, fontweight='bold')
+
+    ax.set_xticks(x)
+    ax.set_xticklabels([CACHE_LABELS[c] for c in strategies])
+    ax.set_ylabel('파동당 DB 조회 피크 (초당)')
+    ax.set_ylim(0, max(m + sd for m, sd in zip(means, stdevs)) * 1.25)
+    ax.set_title('실험 B — 파동당 DB 조회 피크, 3회 평균  (C0 캐시 없음은 축 밖)',
+                 fontsize=12.5, pad=10, loc='left')
+    caption(fig, theme, 'C0 9,515 ± 2,044 (캐시 없음, 축 밖). 오차 막대는 3회 표준편차.', y=-0.04)
+    save(fig, out, theme)
+    plt.close(fig)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--week', default='week2-experiment-a')
@@ -359,6 +471,21 @@ def main():
     out_dir = os.path.join(ROOT, 'results', args.week, 'charts')
     os.makedirs(out_dir, exist_ok=True)
     cache = os.path.join(out_dir, 'data.json')
+
+    if args.week == 'week3-experiment-b':
+        if args.refresh:
+            print('실험 B 는 series 파일이 원본이다 — --refresh 는 해당 없음 (무시)')
+        data = extract_b(args.week)
+        with open(cache, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=1)
+        print('  ', os.path.relpath(cache, ROOT))
+        plt = setup_matplotlib()
+        for mode, theme in THEME.items():
+            chart_stampede_timeline(plt, data, theme,
+                                     os.path.join(out_dir, f'stampede-timeline-{mode}.png'))
+            chart_stampede_peak(plt, data, theme,
+                                 os.path.join(out_dir, f'stampede-peak-{mode}.png'))
+        return
 
     if args.refresh or not os.path.exists(cache):
         print('Prometheus + raw/*.json 에서 추출하는 중...')
