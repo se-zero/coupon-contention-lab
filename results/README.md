@@ -13,6 +13,8 @@ results/
     ├── log/W0-spike-run1.txt    # k6 터미널 출력
     ├── integrity/W0-spike-run1.txt  # verify.sql 출력 (NFR-01/02 판정)
     └── summary.md               # 3회 평균·편차 표 + 해석
+└── week3-experiment-b/
+    └── series/C1-run1.tsv       # 1초 시계열 (실험 B 는 이 파일이 원본 — Prometheus 보존 기간과 무관하게 다시 그린다)
 └── week2-experiment-a-proxy/    # 조건이 달랐던 첫 41회 (호스트 k6, 프록시 경유). 정식 아님 — 규칙 2
 ```
 
@@ -20,10 +22,11 @@ results/
 
 ## 실행 방법
 
-측정은 **반드시 `run-experiment.ps1` 로 한다.** 손으로 k6 를 돌리지 않는다.
+측정은 **반드시 `run-experiment.ps1`(실험 A) · `run-cache.ps1`(실험 B) 로 한다.** 손으로 k6 를 돌리지 않는다.
 
 ```powershell
 .\run-experiment.ps1 -Strategy W0 -Scenario spike -Run 1
+.\run-cache.ps1 -Cache C1 -Run 1
 ```
 
 스크립트가 순서를 대신 지킨다: `전략 적용 → 앱 재기동 → 적용 확인 → DB/Redis 초기화 → k6 → verify.sql → 결과 저장`.
