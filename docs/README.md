@@ -29,9 +29,3 @@
 - [x] [캐시 기초](cache-basics.md) — Cache-Aside / Write-Through / Write-Back, 그리고 캐시가 떠안는 문제
 - [x] [TTL과 캐시 스탬피드](cache-stampede.md) — C1이 만드는 톱니 스파이크, 스탬피드의 두 얼굴
 - [x] [스탬피드 방어 기법](cache-stampede-defense.md) — 지터(C2) / 뮤텍스(C3) / 확률적 조기 갱신(C4), 셋이 건드리는 인자가 다르다
-
-### 측정
-
-- [ ] 백분위 응답 시간(P50/P95/P99)과 평균의 함정
-- [ ] Little's Law — 처리량 · 동시성 · 지연의 관계
-- [ ] 부하 테스트 시나리오 (ramp / spike / soak / chaos)
